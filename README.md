@@ -1,3 +1,2 @@
 # LAMIPS
-Laser aided milling intelligent planning system for graduation
-代码文件见master branch
+Laser aided milling intelligent planning system for graduation /n代码文件见master branch
