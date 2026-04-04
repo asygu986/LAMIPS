@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'ui_mainDfVDQn.ui'
+## Form generated from reading UI file 'ui_mainaYEkXS.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.15.2
 ##
@@ -34,50 +34,6 @@ class Ui_MainWindow(object):
         self.gridLayout.setSpacing(0)
         self.gridLayout.setObjectName(u"gridLayout")
         self.gridLayout.setContentsMargins(0, 0, 0, 0)
-        self.Status = QFrame(self.centralwidget)
-        self.Status.setObjectName(u"Status")
-        self.Status.setMaximumSize(QSize(16777215, 55))
-        self.Status.setStyleSheet(u"QFrame{\n"
-"background-color:rgb(161, 194, 255)\n"
-"}")
-        self.Status.setFrameShape(QFrame.StyledPanel)
-        self.Status.setFrameShadow(QFrame.Raised)
-        self.textEdit_status = QTextEdit(self.Status)
-        self.textEdit_status.setObjectName(u"textEdit_status")
-        self.textEdit_status.setGeometry(QRect(10, 2, 651, 50))
-        self.textEdit_status.setStyleSheet(u"QTextEdit {\n"
-"    background-color: #f8f9fa;\n"
-"    border: 1px solid #dee2e6;\n"
-"    font-family: \"Consolas\", \"Monaco\", monospace;\n"
-"    font-size: 9pt;\n"
-"}")
-        self.textEdit_status.setReadOnly(True)
-        self.layoutWidget = QWidget(self.Status)
-        self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(692, 15, 295, 30))
-        self.horizontalLayout_2 = QHBoxLayout(self.layoutWidget)
-        self.horizontalLayout_2.setSpacing(10)
-        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
-        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
-        self.checkBox_auto_scroll = QCheckBox(self.layoutWidget)
-        self.checkBox_auto_scroll.setObjectName(u"checkBox_auto_scroll")
-        self.checkBox_auto_scroll.setChecked(True)
-
-        self.horizontalLayout_2.addWidget(self.checkBox_auto_scroll)
-
-        self.btn_clear_status = QPushButton(self.layoutWidget)
-        self.btn_clear_status.setObjectName(u"btn_clear_status")
-
-        self.horizontalLayout_2.addWidget(self.btn_clear_status)
-
-        self.btn_save_log = QPushButton(self.layoutWidget)
-        self.btn_save_log.setObjectName(u"btn_save_log")
-
-        self.horizontalLayout_2.addWidget(self.btn_save_log)
-
-
-        self.gridLayout.addWidget(self.Status, 1, 0, 1, 3)
-
         self.Input = QFrame(self.centralwidget)
         self.Input.setObjectName(u"Input")
         self.Input.setMaximumSize(QSize(16777215, 16777215))
@@ -158,13 +114,10 @@ class Ui_MainWindow(object):
         self.label_7.setGeometry(QRect(310, 100, 72, 15))
         self.label_8 = QLabel(self.Input)
         self.label_8.setObjectName(u"label_8")
-        self.label_8.setGeometry(QRect(180, 200, 72, 15))
+        self.label_8.setGeometry(QRect(170, 210, 72, 15))
         self.label_9 = QLabel(self.Input)
         self.label_9.setObjectName(u"label_9")
-        self.label_9.setGeometry(QRect(310, 200, 72, 15))
-        self.label_10 = QLabel(self.Input)
-        self.label_10.setObjectName(u"label_10")
-        self.label_10.setGeometry(QRect(430, 200, 101, 16))
+        self.label_9.setGeometry(QRect(410, 210, 72, 15))
         self.label_11 = QLabel(self.Input)
         self.label_11.setObjectName(u"label_11")
         self.label_11.setGeometry(QRect(10, 100, 71, 16))
@@ -263,13 +216,10 @@ class Ui_MainWindow(object):
         self.lineEdit_rho.setGeometry(QRect(350, 100, 71, 21))
         self.lineEdit_source_power = QLineEdit(self.Input)
         self.lineEdit_source_power.setObjectName(u"lineEdit_source_power")
-        self.lineEdit_source_power.setGeometry(QRect(220, 200, 81, 21))
+        self.lineEdit_source_power.setGeometry(QRect(240, 210, 81, 21))
         self.lineEdit_rb0 = QLineEdit(self.Input)
         self.lineEdit_rb0.setObjectName(u"lineEdit_rb0")
-        self.lineEdit_rb0.setGeometry(QRect(350, 200, 71, 21))
-        self.lineEdit_N = QLineEdit(self.Input)
-        self.lineEdit_N.setObjectName(u"lineEdit_N")
-        self.lineEdit_N.setGeometry(QRect(500, 200, 71, 21))
+        self.lineEdit_rb0.setGeometry(QRect(480, 210, 81, 21))
         self.btn_open_coords = QPushButton(self.Input)
         self.btn_open_coords.setObjectName(u"btn_open_coords")
         self.btn_open_coords.setGeometry(QRect(20, 350, 101, 41))
@@ -286,13 +236,13 @@ class Ui_MainWindow(object):
         self.line_9.setGeometry(QRect(170, 150, 118, 3))
         self.line_9.setFrameShape(QFrame.HLine)
         self.line_9.setFrameShadow(QFrame.Sunken)
-        self.layoutWidget1 = QWidget(self.Input)
-        self.layoutWidget1.setObjectName(u"layoutWidget1")
-        self.layoutWidget1.setGeometry(QRect(70, 800, 481, 41))
-        self.horizontalLayout = QHBoxLayout(self.layoutWidget1)
+        self.layoutWidget = QWidget(self.Input)
+        self.layoutWidget.setObjectName(u"layoutWidget")
+        self.layoutWidget.setGeometry(QRect(70, 800, 481, 41))
+        self.horizontalLayout = QHBoxLayout(self.layoutWidget)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
-        self.btn_cutter = QPushButton(self.layoutWidget1)
+        self.btn_cutter = QPushButton(self.layoutWidget)
         self.btn_cutter.setObjectName(u"btn_cutter")
         self.btn_cutter.setStyleSheet(u"QPushButton{\n"
 "	background-color:rgb(0,174,236);\n"
@@ -305,7 +255,7 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout.addWidget(self.btn_cutter)
 
-        self.btn_laser = QPushButton(self.layoutWidget1)
+        self.btn_laser = QPushButton(self.layoutWidget)
         self.btn_laser.setObjectName(u"btn_laser")
         self.btn_laser.setStyleSheet(u"QPushButton{\n"
 "	background-color:rgb(246, 255, 144);\n"
@@ -318,19 +268,7 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout.addWidget(self.btn_laser)
 
-        self.btn_heat_even = QPushButton(self.layoutWidget1)
-        self.btn_heat_even.setObjectName(u"btn_heat_even")
-        self.btn_heat_even.setStyleSheet(u"QPushButton{\n"
-"	background-color:rgb(255, 0, 0);\n"
-"	height:22px;\n"
-"}\n"
-"QPushButton::hover{\n"
-"	background-color:rgb(65,184,131);\n"
-"}")
-
-        self.horizontalLayout.addWidget(self.btn_heat_even)
-
-        self.btn_opt_laser = QPushButton(self.layoutWidget1)
+        self.btn_opt_laser = QPushButton(self.layoutWidget)
         self.btn_opt_laser.setObjectName(u"btn_opt_laser")
         self.btn_opt_laser.setStyleSheet(u"QPushButton{\n"
 "	background-color:rgb(255, 97, 139);\n"
@@ -342,8 +280,64 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout.addWidget(self.btn_opt_laser)
 
+        self.btn_heat_even = QPushButton(self.layoutWidget)
+        self.btn_heat_even.setObjectName(u"btn_heat_even")
+        self.btn_heat_even.setStyleSheet(u"QPushButton{\n"
+"	background-color:rgb(255, 0, 0);\n"
+"	height:22px;\n"
+"}\n"
+"QPushButton::hover{\n"
+"	background-color:rgb(65,184,131);\n"
+"}")
+
+        self.horizontalLayout.addWidget(self.btn_heat_even)
+
 
         self.gridLayout.addWidget(self.Input, 0, 0, 1, 1)
+
+        self.Status = QFrame(self.centralwidget)
+        self.Status.setObjectName(u"Status")
+        self.Status.setMaximumSize(QSize(16777215, 55))
+        self.Status.setStyleSheet(u"QFrame{\n"
+"background-color:rgb(161, 194, 255)\n"
+"}")
+        self.Status.setFrameShape(QFrame.StyledPanel)
+        self.Status.setFrameShadow(QFrame.Raised)
+        self.textEdit_status = QTextEdit(self.Status)
+        self.textEdit_status.setObjectName(u"textEdit_status")
+        self.textEdit_status.setGeometry(QRect(10, 2, 651, 50))
+        self.textEdit_status.setStyleSheet(u"QTextEdit {\n"
+"    background-color: #f8f9fa;\n"
+"    border: 1px solid #dee2e6;\n"
+"    font-family: \"Consolas\", \"Monaco\", monospace;\n"
+"    font-size: 9pt;\n"
+"}")
+        self.textEdit_status.setReadOnly(True)
+        self.layoutWidget1 = QWidget(self.Status)
+        self.layoutWidget1.setObjectName(u"layoutWidget1")
+        self.layoutWidget1.setGeometry(QRect(692, 15, 295, 30))
+        self.horizontalLayout_2 = QHBoxLayout(self.layoutWidget1)
+        self.horizontalLayout_2.setSpacing(10)
+        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.checkBox_auto_scroll = QCheckBox(self.layoutWidget1)
+        self.checkBox_auto_scroll.setObjectName(u"checkBox_auto_scroll")
+        self.checkBox_auto_scroll.setChecked(True)
+
+        self.horizontalLayout_2.addWidget(self.checkBox_auto_scroll)
+
+        self.btn_clear_status = QPushButton(self.layoutWidget1)
+        self.btn_clear_status.setObjectName(u"btn_clear_status")
+
+        self.horizontalLayout_2.addWidget(self.btn_clear_status)
+
+        self.btn_save_log = QPushButton(self.layoutWidget1)
+        self.btn_save_log.setObjectName(u"btn_save_log")
+
+        self.horizontalLayout_2.addWidget(self.btn_save_log)
+
+
+        self.gridLayout.addWidget(self.Status, 1, 0, 1, 4)
 
         self.Display = QFrame(self.centralwidget)
         self.Display.setObjectName(u"Display")
@@ -352,69 +346,125 @@ class Ui_MainWindow(object):
 "}")
         self.Display.setFrameShape(QFrame.StyledPanel)
         self.Display.setFrameShadow(QFrame.Raised)
-        self.label_cutterTraj = QLabel(self.Display)
-        self.label_cutterTraj.setObjectName(u"label_cutterTraj")
-        self.label_cutterTraj.setGeometry(QRect(80, 10, 81, 16))
-        self.label_cutterTraj.setFont(font1)
-        self.label_laserTraj = QLabel(self.Display)
-        self.label_laserTraj.setObjectName(u"label_laserTraj")
-        self.label_laserTraj.setGeometry(QRect(680, 10, 111, 16))
-        self.label_laserTraj.setFont(font1)
-        self.label_heatDist = QLabel(self.Display)
-        self.label_heatDist.setObjectName(u"label_heatDist")
-        self.label_heatDist.setGeometry(QRect(80, 420, 181, 16))
-        self.label_heatDist.setFont(font1)
-        self.cutter_plot_display = QLabel(self.Display)
+        self.stackedWidget = QStackedWidget(self.Display)
+        self.stackedWidget.setObjectName(u"stackedWidget")
+        self.stackedWidget.setGeometry(QRect(139, -1, 1121, 931))
+        self.cutter_page = QWidget()
+        self.cutter_page.setObjectName(u"cutter_page")
+        self.cutter_plot_display = QLabel(self.cutter_page)
         self.cutter_plot_display.setObjectName(u"cutter_plot_display")
-        self.cutter_plot_display.setGeometry(QRect(80, 40, 480, 360))
+        self.cutter_plot_display.setGeometry(QRect(100, 80, 931, 701))
         self.cutter_plot_display.setFrameShape(QFrame.Box)
         self.cutter_plot_display.setScaledContents(True)
         self.cutter_plot_display.setAlignment(Qt.AlignCenter)
-        self.heat_plot_display = QLabel(self.Display)
+        self.label_cutterTraj = QLabel(self.cutter_page)
+        self.label_cutterTraj.setObjectName(u"label_cutterTraj")
+        self.label_cutterTraj.setGeometry(QRect(100, 40, 81, 16))
+        self.label_cutterTraj.setFont(font1)
+        self.stackedWidget.addWidget(self.cutter_page)
+        self.laser_page = QWidget()
+        self.laser_page.setObjectName(u"laser_page")
+        self.laser_plot_widget = InteractiveMatplotlibWidget(self.laser_page)
+        self.laser_plot_widget.setObjectName(u"laser_plot_widget")
+        self.laser_plot_widget.setGeometry(QRect(20, 50, 1101, 881))
+        self.label_laserTraj = QLabel(self.laser_page)
+        self.label_laserTraj.setObjectName(u"label_laserTraj")
+        self.label_laserTraj.setGeometry(QRect(20, 20, 111, 16))
+        self.label_laserTraj.setFont(font1)
+        self.stackedWidget.addWidget(self.laser_page)
+        self.heat_page = QWidget()
+        self.heat_page.setObjectName(u"heat_page")
+        self.heat_animation_container = QWidget(self.heat_page)
+        self.heat_animation_container.setObjectName(u"heat_animation_container")
+        self.heat_animation_container.setGeometry(QRect(450, 120, 681, 651))
+        self.heat_plot_display = QLabel(self.heat_page)
         self.heat_plot_display.setObjectName(u"heat_plot_display")
-        self.heat_plot_display.setGeometry(QRect(80, 450, 560, 420))
+        self.heat_plot_display.setGeometry(QRect(10, 240, 431, 381))
         self.heat_plot_display.setFrameShape(QFrame.Box)
         self.heat_plot_display.setScaledContents(True)
         self.heat_plot_display.setAlignment(Qt.AlignCenter)
-        self.heat_animation_container = QWidget(self.Display)
-        self.heat_animation_container.setObjectName(u"heat_animation_container")
-        self.heat_animation_container.setGeometry(QRect(680, 450, 560, 420))
-        self.label_heatDist_animation = QLabel(self.Display)
+        self.label_heatDist = QLabel(self.heat_page)
+        self.label_heatDist.setObjectName(u"label_heatDist")
+        self.label_heatDist.setGeometry(QRect(10, 180, 181, 16))
+        self.label_heatDist.setFont(font1)
+        self.label_heatDist_animation = QLabel(self.heat_page)
         self.label_heatDist_animation.setObjectName(u"label_heatDist_animation")
-        self.label_heatDist_animation.setGeometry(QRect(680, 420, 101, 16))
+        self.label_heatDist_animation.setGeometry(QRect(450, 80, 101, 16))
         self.label_heatDist_animation.setFont(font1)
-        self.layoutWidget2 = QWidget(self.Display)
-        self.layoutWidget2.setObjectName(u"layoutWidget2")
-        self.layoutWidget2.setGeometry(QRect(720, 880, 461, 30))
-        self.horizontalLayout_3 = QHBoxLayout(self.layoutWidget2)
+        self.layoutWidget_2 = QWidget(self.heat_page)
+        self.layoutWidget_2.setObjectName(u"layoutWidget_2")
+        self.layoutWidget_2.setGeometry(QRect(550, 850, 461, 30))
+        self.horizontalLayout_3 = QHBoxLayout(self.layoutWidget_2)
         self.horizontalLayout_3.setSpacing(10)
         self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
         self.horizontalLayout_3.setContentsMargins(0, 0, 0, 0)
-        self.btn_anim_play = QPushButton(self.layoutWidget2)
+        self.btn_anim_play = QPushButton(self.layoutWidget_2)
         self.btn_anim_play.setObjectName(u"btn_anim_play")
 
         self.horizontalLayout_3.addWidget(self.btn_anim_play)
 
-        self.btn_anim_pause = QPushButton(self.layoutWidget2)
+        self.btn_anim_pause = QPushButton(self.layoutWidget_2)
         self.btn_anim_pause.setObjectName(u"btn_anim_pause")
 
         self.horizontalLayout_3.addWidget(self.btn_anim_pause)
 
-        self.btn_anim_reset = QPushButton(self.layoutWidget2)
+        self.btn_anim_reset = QPushButton(self.layoutWidget_2)
         self.btn_anim_reset.setObjectName(u"btn_anim_reset")
 
         self.horizontalLayout_3.addWidget(self.btn_anim_reset)
 
-        self.btn_anim_save = QPushButton(self.layoutWidget2)
+        self.btn_anim_save = QPushButton(self.layoutWidget_2)
         self.btn_anim_save.setObjectName(u"btn_anim_save")
 
         self.horizontalLayout_3.addWidget(self.btn_anim_save)
 
-        self.laser_plot_widget = InteractiveMatplotlibWidget(self.Display)
-        self.laser_plot_widget.setObjectName(u"laser_plot_widget")
-        self.laser_plot_widget.setGeometry(QRect(679, 49, 561, 351))
+        self.stackedWidget.addWidget(self.heat_page)
+        self.layoutWidget2 = QWidget(self.Display)
+        self.layoutWidget2.setObjectName(u"layoutWidget2")
+        self.layoutWidget2.setGeometry(QRect(10, 270, 131, 331))
+        self.verticalLayout = QVBoxLayout(self.layoutWidget2)
+        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+        self.btn_cutter_change = QPushButton(self.layoutWidget2)
+        self.btn_cutter_change.setObjectName(u"btn_cutter_change")
+        self.btn_cutter_change.setStyleSheet(u"QPushButton{\n"
+"	background-color:rgb(0,174,236);\n"
+"	height:22px;\n"
+"\n"
+"}\n"
+"QPushButton::hover{\n"
+"	background-color:rgb(65,184,131);\n"
+"}")
 
-        self.gridLayout.addWidget(self.Display, 0, 1, 1, 2)
+        self.verticalLayout.addWidget(self.btn_cutter_change)
+
+        self.btn_laser_change = QPushButton(self.layoutWidget2)
+        self.btn_laser_change.setObjectName(u"btn_laser_change")
+        self.btn_laser_change.setStyleSheet(u"QPushButton{\n"
+"	background-color:rgb(246, 255, 144);\n"
+"	height:22px;\n"
+"\n"
+"}\n"
+"QPushButton::hover{\n"
+"	background-color:rgb(65,184,131);\n"
+"}")
+
+        self.verticalLayout.addWidget(self.btn_laser_change)
+
+        self.btn_heat_change = QPushButton(self.layoutWidget2)
+        self.btn_heat_change.setObjectName(u"btn_heat_change")
+        self.btn_heat_change.setStyleSheet(u"QPushButton{\n"
+"	background-color:rgb(255, 0, 0);\n"
+"	height:22px;\n"
+"}\n"
+"QPushButton::hover{\n"
+"	background-color:rgb(65,184,131);\n"
+"}")
+
+        self.verticalLayout.addWidget(self.btn_heat_change)
+
+
+        self.gridLayout.addWidget(self.Display, 0, 1, 1, 1)
 
         self.gridLayout.setColumnStretch(0, 1)
         self.gridLayout.setColumnStretch(1, 2)
@@ -439,6 +489,7 @@ class Ui_MainWindow(object):
 
         self.comboBox_trajectory_type.setCurrentIndex(0)
         self.stackedWidget_params.setCurrentIndex(0)
+        self.stackedWidget.setCurrentIndex(2)
 
 
         QMetaObject.connectSlotsByName(MainWindow)
@@ -450,20 +501,6 @@ class Ui_MainWindow(object):
         self.actionload.setText(QCoreApplication.translate("MainWindow", u"load", None))
         self.actiontool.setText(QCoreApplication.translate("MainWindow", u"tool", None))
         self.actioninformation.setText(QCoreApplication.translate("MainWindow", u"info", None))
-        self.textEdit_status.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
-"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-"p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:'Consolas','Monaco','monospace'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p></body></html>", None))
-        self.checkBox_auto_scroll.setText(QCoreApplication.translate("MainWindow", u"\u81ea\u52a8\u6eda\u52a8", None))
-#if QT_CONFIG(tooltip)
-        self.btn_clear_status.setToolTip(QCoreApplication.translate("MainWindow", u"\u6e05\u7a7a\u6240\u6709\u72b6\u6001\u6d88\u606f", None))
-#endif // QT_CONFIG(tooltip)
-        self.btn_clear_status.setText(QCoreApplication.translate("MainWindow", u"\u6e05\u9664", None))
-#if QT_CONFIG(tooltip)
-        self.btn_save_log.setToolTip(QCoreApplication.translate("MainWindow", u"\u5c06\u72b6\u6001\u6d88\u606f\u4fdd\u5b58\u5230\u6587\u4ef6", None))
-#endif // QT_CONFIG(tooltip)
-        self.btn_save_log.setText(QCoreApplication.translate("MainWindow", u"\u4fdd\u5b58\u65e5\u5fd7", None))
         self.label_hand.setText(QCoreApplication.translate("MainWindow", u"\u624b\u52a8\u8f93\u5165", None))
         self.label_Gcode.setText(QCoreApplication.translate("MainWindow", u"G\u4ee3\u7801\u8f93\u5165", None))
         self.label.setText(QCoreApplication.translate("MainWindow", u"\u94e3\u524a\u53c2\u6570", None))
@@ -472,9 +509,8 @@ class Ui_MainWindow(object):
         self.label_5.setText(QCoreApplication.translate("MainWindow", u"\u70ed\u5bfc\u7387", None))
         self.label_6.setText(QCoreApplication.translate("MainWindow", u"\u6bd4\u70ed\u5bb9", None))
         self.label_7.setText(QCoreApplication.translate("MainWindow", u"\u5bc6\u5ea6", None))
-        self.label_8.setText(QCoreApplication.translate("MainWindow", u"\u529f\u7387", None))
-        self.label_9.setText(QCoreApplication.translate("MainWindow", u"\u534a\u5f84", None))
-        self.label_10.setText(QCoreApplication.translate("MainWindow", u"\u626b\u63cf\u5468\u671f", None))
+        self.label_8.setText(QCoreApplication.translate("MainWindow", u"\u6fc0\u5149\u529f\u7387", None))
+        self.label_9.setText(QCoreApplication.translate("MainWindow", u"\u6fc0\u5149\u534a\u5f84", None))
         self.label_11.setText(QCoreApplication.translate("MainWindow", u"\u94e3\u5200\u76f4\u5f84", None))
         self.label_12.setText(QCoreApplication.translate("MainWindow", u"\u94e3\u524a\u5bbd\u5ea6", None))
         self.label_13.setText(QCoreApplication.translate("MainWindow", u"\u94e3\u524a\u6df1\u5ea6", None))
@@ -518,18 +554,35 @@ class Ui_MainWindow(object):
         self.label_4.setText(QCoreApplication.translate("MainWindow", u"\u8def\u5f84\u53c2\u6570", None))
         self.btn_cutter.setText(QCoreApplication.translate("MainWindow", u"\u68c0\u89c6\u5200\u5177\u8f68\u8ff9", None))
         self.btn_laser.setText(QCoreApplication.translate("MainWindow", u"\u751f\u6210\u6fc0\u5149\u626b\u63cf\u8f68\u8ff9", None))
-        self.btn_heat_even.setText(QCoreApplication.translate("MainWindow", u"\u751f\u6210\u70ed\u573a\u56fe", None))
         self.btn_opt_laser.setText(QCoreApplication.translate("MainWindow", u"\u667a\u80fd\u4f18\u5316\u6fc0\u5149\u8f68\u8ff9", None))
+        self.btn_heat_even.setText(QCoreApplication.translate("MainWindow", u"\u751f\u6210\u70ed\u573a\u56fe", None))
+        self.textEdit_status.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"</style></head><body style=\" font-family:'Consolas','Monaco','monospace'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p></body></html>", None))
+        self.checkBox_auto_scroll.setText(QCoreApplication.translate("MainWindow", u"\u81ea\u52a8\u6eda\u52a8", None))
+#if QT_CONFIG(tooltip)
+        self.btn_clear_status.setToolTip(QCoreApplication.translate("MainWindow", u"\u6e05\u7a7a\u6240\u6709\u72b6\u6001\u6d88\u606f", None))
+#endif // QT_CONFIG(tooltip)
+        self.btn_clear_status.setText(QCoreApplication.translate("MainWindow", u"\u6e05\u9664", None))
+#if QT_CONFIG(tooltip)
+        self.btn_save_log.setToolTip(QCoreApplication.translate("MainWindow", u"\u5c06\u72b6\u6001\u6d88\u606f\u4fdd\u5b58\u5230\u6587\u4ef6", None))
+#endif // QT_CONFIG(tooltip)
+        self.btn_save_log.setText(QCoreApplication.translate("MainWindow", u"\u4fdd\u5b58\u65e5\u5fd7", None))
+        self.cutter_plot_display.setText("")
         self.label_cutterTraj.setText(QCoreApplication.translate("MainWindow", u"\u94e3\u5200\u8f68\u8ff9\u56fe", None))
         self.label_laserTraj.setText(QCoreApplication.translate("MainWindow", u"\u6fc0\u5149\u6e90\u8def\u5f84\u56fe", None))
-        self.label_heatDist.setText(QCoreApplication.translate("MainWindow", u"\u6700\u540e\u65f6\u523b\u6e29\u5ea6\u573a\u5206\u5e03", None))
-        self.cutter_plot_display.setText("")
         self.heat_plot_display.setText("")
+        self.label_heatDist.setText(QCoreApplication.translate("MainWindow", u"\u6700\u540e\u65f6\u523b\u6e29\u5ea6\u573a\u5206\u5e03", None))
         self.label_heatDist_animation.setText(QCoreApplication.translate("MainWindow", u"\u70ed\u573a\u53d8\u5316\u52a8\u753b", None))
         self.btn_anim_play.setText(QCoreApplication.translate("MainWindow", u"\u64ad\u653e\u52a8\u753b", None))
         self.btn_anim_pause.setText(QCoreApplication.translate("MainWindow", u"\u6682\u505c\u52a8\u753b", None))
         self.btn_anim_reset.setText(QCoreApplication.translate("MainWindow", u"\u91cd\u7f6e", None))
         self.btn_anim_save.setText(QCoreApplication.translate("MainWindow", u"\u4fdd\u5b58\u52a8\u753b", None))
+        self.btn_cutter_change.setText(QCoreApplication.translate("MainWindow", u"\u5200\u5177\u8f68\u8ff9\u56fe", None))
+        self.btn_laser_change.setText(QCoreApplication.translate("MainWindow", u"\u6fc0\u5149\u626b\u63cf\u8f68\u8ff9", None))
+        self.btn_heat_change.setText(QCoreApplication.translate("MainWindow", u"\u70ed\u573a\u9759\u6001\u56fe\u53ca\u52a8\u753b", None))
         self.file.setTitle(QCoreApplication.translate("MainWindow", u"\u6587\u4ef6", None))
         self.tool.setTitle(QCoreApplication.translate("MainWindow", u"\u5de5\u5177", None))
     # retranslateUi

@@ -1,14 +1,14 @@
 import numpy as np
 import math
-
+import scipy.io as sio  # 读取.mat文件
 
 # 刀具轨迹生成函数
-def cutter_trajectory(t, con, cutter_traj_type, params, coordinates):
+def cutter_trajectory(con, coordinates):
     """
     计算多段直线连接的刀具轨迹
 
     输入参数：
-        t: 时间数组，单位：秒 (s)
+        tbs: 时间数组，单位：秒 (s)
         con: 全局参数集合
         cutter_traj_type: 刀具轨迹类型，"line" - 直线，"sin" - 正弦波
         params: 轨迹参数
@@ -26,20 +26,22 @@ def cutter_trajectory(t, con, cutter_traj_type, params, coordinates):
         coordinates = [(0.0, 0.0), (0.01, 0.0)]
 
     # 获取进给速度
-    X0Cutter = con[10]  # 刀具初始X位置
-    Y0Cutter = con[11]  # 刀具初始Y位置
+    X0Cutter = con['X0Cutter']  # 刀具初始X位置
+    Y0Cutter = con['Y0Cutter']  # 刀具初始Y位置
 
-    fx = con[15]  # X轴进给速度
-    fy = con[16]  # 假设fy=0
+    fx = con['fx']  # X轴进给速度
+    fy = con['fy']  # 假设fy=0
+    # fv = math.sqrt(fx ** 2) # 不考虑y轴进给速度
     fv = math.sqrt(fx ** 2 + fy ** 2)
 
     if fv == 0:
         print("警告：进给速度为0，无法生成轨迹")
-        return np.zeros(len(t)), np.zeros(len(t)), {}
+        return {}
 
     # 计算总路径长度和每段信息
     total_length = 0
     segments = []
+
 
     for i in range(len(coordinates) - 1):
         start_point = coordinates[i]
@@ -47,7 +49,7 @@ def cutter_trajectory(t, con, cutter_traj_type, params, coordinates):
 
         dx = end_point[0] - start_point[0]
         dy = end_point[1] - start_point[1]
-        segment_length = math.sqrt(dx ** 2 + dy ** 2)
+        segment_length = math.sqrt(dx ** 2 + dy ** 2) # 每段长度
 
         if segment_length == 0:
             print(f"警告：第{i + 1}段长度为0，跳过")
@@ -57,7 +59,7 @@ def cutter_trajectory(t, con, cutter_traj_type, params, coordinates):
         cos_theta = dx / segment_length
         sin_theta = dy / segment_length
 
-        # 计算该段所需时间
+        # 计算该段运动所需时间
         segment_time = segment_length / fv  # 原本为fv
 
         segment_info = {
@@ -70,335 +72,284 @@ def cutter_trajectory(t, con, cutter_traj_type, params, coordinates):
             'cos_theta': cos_theta,
             'sin_theta': sin_theta,
             'time': segment_time,
-            'start_time': total_length / fv,  # 累积时间
-            'end_time': (total_length + segment_length) / fv
+            'start_time': total_length / fv,  # 每一段刀具轨迹的开始时间
+            'end_time': (total_length + segment_length) / fv # 每一段刀具轨迹的结束时间
         }
 
         segments.append(segment_info)
         total_length += segment_length
 
+    # 获取刀具轨迹点
+    x_cutter=np.zeros(len(coordinates))
+    y_cutter=np.zeros(len(coordinates))
+    for j in range(len(coordinates)):
+        x_cutter[j]=coordinates[j][0]
+        y_cutter[j]=coordinates[j][1]
+
+
     if total_length == 0:
         print("警告：总路径长度为0，无法生成轨迹")
-        return np.zeros(len(t)), np.zeros(len(t)), {}
+        return {}
 
     # 计算总时间
     total_time = total_length / fv
-
-    # 初始化输出数组
-    x_cutter = np.zeros(len(t))
-    y_cutter = np.zeros(len(t))
-
-    # 计算每个时间点对应的位置
-    for idx, time_val in enumerate(t):
-        # 归一化时间到[0, total_time]
-        if time_val < 0:
-            time_val = 0
-        elif time_val > total_time:
-            time_val = total_time
-
-        # 查找当前时间属于哪一段
-        current_segment = None
-        local_time = 0
-
-        for seg in segments:
-            if time_val >= seg['start_time'] and time_val <= seg['end_time']:
-                current_segment = seg
-                local_time = time_val - seg['start_time']
-                break
-
-        # 如果时间超出所有段，使用最后一段的终点
-        if current_segment is None:
-            last_seg = segments[-1]
-            x_cutter[idx] = last_seg['end_point'][0]
-            y_cutter[idx] = last_seg['end_point'][1]
-            continue
-
-        # 计算在当前段中的归一化时间
-        if current_segment['time'] > 0:
-            normalized_t = local_time / current_segment['time']
-        else:
-            normalized_t = 0
-
-        # 限制在0到1之间
-        normalized_t = max(0, min(1, normalized_t))
-
-        # 计算沿当前段的位移
-        s = normalized_t * current_segment['length']
-
-        # 根据轨迹类型计算坐标
-        if cutter_traj_type == "line":
-            # 直线轨迹
-            x_cutter[idx] = current_segment['start_point'][0] + s * current_segment['cos_theta']
-            y_cutter[idx] = current_segment['start_point'][1] + s * current_segment['sin_theta']
-
-        elif cutter_traj_type == "sin":
-            # X方向：匀速直线运动
-            x_cutter = X0Cutter + fx * t
-            amplitude = params.get("amplitude")  # 注意使用小括号
-            frequency = params.get("frequency")
-            y_cutter = Y0Cutter + amplitude * np.sin(frequency * t)
-
-        elif cutter_traj_type == "zigzag":
-            # 锯齿波轨迹
-            num_zigzags = params.get("num_zigzags", 3)
-            amplitude_zigzag = params.get("amplitude_zigzag", 0.009)
-            period = params.get("period", 6.28)
-
-            # 计算相位
-            phase = 2 * np.pi * num_zigzags * normalized_t
-
-            # 垂直方向单位向量
-            perp_cos = -current_segment['sin_theta']
-            perp_sin = current_segment['cos_theta']
-
-            # 创建锯齿波
-            zigzag = amplitude_zigzag * (
-                        2 * np.abs(2 * (phase / (2 * np.pi) - np.floor(phase / (2 * np.pi) + 0.5))) - 1)
-
-            # 生成轨迹
-            x_cutter[idx] = current_segment['start_point'][0] + s * current_segment['cos_theta'] + zigzag * perp_cos
-            y_cutter[idx] = current_segment['start_point'][1] + s * current_segment['sin_theta'] + zigzag * perp_sin
-
-        else:
-            # 默认直线轨迹
-            x_cutter[idx] = current_segment['start_point'][0] + s * current_segment['cos_theta']
-            y_cutter[idx] = current_segment['start_point'][1] + s * current_segment['sin_theta']
-
     return x_cutter, y_cutter, {'segments': segments, 'total_length': total_length, 'total_time': total_time}
 
 
-def calculate_theta(x_cutter, y_cutter, t):
+# ===================== 你提供的三个核心函数（仅修复rotate_coordinates，其他完全不变） =====================
+def calculate_theta(x_cutter_v, y_cutter_v, t):
     """
-    计算瞬时运动方向角 (theta)，基于速度梯度
-
-    输入参数：
-        x_cutter: 刀具X坐标数组，单位：米 (m)
-        y_cutter: 刀具Y坐标数组，单位：米 (m)
-        t: 时间数组，单位：秒 (s)
-
-    输出参数：
-        theta: 瞬时运动方向角数组，单位：弧度 (rad)
+    计算瞬时运动方向角 (theta)，基于刀具的速度梯度
     """
-    # 计算速度分量（数值微分）
-    v_x = np.gradient(x_cutter, t)  # dx/dt
-    v_y = np.gradient(y_cutter, t)  # dy/dt
-
-    # 计算每个时间点的角度
-    theta = np.arctan2(v_y, v_x)  # 使用arctan2获得正确的象限
-
+    v_x = np.gradient(x_cutter_v, t)
+    v_y = np.gradient(y_cutter_v, t)
+    theta = np.arctan2(v_y, v_x)
     return theta
 
 
 def dynamic_angle_factor(theta, t, base_factor=1, sharpness_factor=0.5):
     """
     基于theta变化率动态调整角度因子
-
-    输入参数：
-        theta: 角度数组，单位：弧度 (rad)
-        t: 时间数组，单位：秒 (s)
-        base_factor: 基础角度因子，默认值 1
-        sharpness_factor: 尖锐度因子，默认值 0.5
-
-    输出参数：
-        angle_factor: 动态调整后的角度因子数组
     """
-    # 计算theta的变化率（dtheta/dt）
     theta_rate = np.gradient(theta, t)
-    # 基于theta变化率计算角度因子
     angle_factor = base_factor / (1 + sharpness_factor * np.abs(theta_rate))
-
     return angle_factor
 
 
 def rotate_coordinates(x_laser, y_laser, x_cutter, y_cutter, theta):
     """
-    坐标系变换函数（带距离保持）
-
-    输入参数：
-        x_laser: 激光原始X坐标，单位：米 (m)
-        y_laser: 激光原始Y坐标，单位：米 (m)
-        x_cutter: 刀具当前位置X坐标，单位：米 (m)
-        y_cutter: 刀具当前位置Y坐标，单位：米 (m)
-        theta: 旋转角度，单位：弧度 (rad)
-
-    输出参数：
-        x_rotated: 旋转后的X坐标，单位：米 (m)
-        y_rotated: 旋转后的Y坐标，单位：米 (m)
+    坐标系变换函数（带距离保持）→ 修复维度报错，完全兼容数组输入
     """
     # 将激光坐标平移到以刀具位置为原点
     x_laser_translated = x_laser - x_cutter
     y_laser_translated = y_laser - y_cutter
 
-    # 旋转矩阵
-    R = np.array([[np.cos(theta), -np.sin(theta)],
-                  [np.sin(theta), np.cos(theta)]])
-
-    # 应用旋转
-    xy_rotated = np.dot(R, np.array([x_laser_translated, y_laser_translated]))
-
-    # 平移回原始坐标系
-    x_rotated = xy_rotated[0] + x_cutter
-    y_rotated = xy_rotated[1] + y_cutter
+    # 向量化旋转计算，适配任意长度的数组
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    x_rotated = x_laser_translated * cos_t - y_laser_translated * sin_t + x_cutter
+    y_rotated = x_laser_translated * sin_t + y_laser_translated * cos_t + y_cutter
 
     return x_rotated, y_rotated
 
+
 # 注意，这里的x坐标一定不能为负值
-def sweeping_laser_trajectory_with_distance_preservation(scWidth, con, N, traj_params, coordinates):
+def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cutter, y_cutter, cutter_info):
     """
     生成带动态旋转与按段去重/延申的激光扫描轨迹：
     scWidth: 激光宽度；N：控制激光点密集程度
     - 对每段，在段末沿刀具轨迹方向"向后"延申Ret长度；
     - 从第二段起，去掉该段起点沿刀具轨迹Ret长度内的激光轨迹，避免与上一段重叠。
     """
+    # 计算轨迹用参数
     traj_type = traj_params['trajectory_type'].lower()
     params = traj_params['params']
+    ae = con["ae"]
+    ret = con['ret']  # 有效铣刀半径
+    laser_r = con['laser_r']  # 激光束半径
+    fz = con["fz"]  # 每齿进给量
+    tooth_number = con["tooth_number"]
+    nr = con["nr"]
+    dt = con["dt"]  # 时间步长，即激光两点之间间隔时间
+    base_factor = con["base_factor"]
+    sharpness_factor = con["sharpness_factor"]
 
-    Ret = con[5]  # 有效铣刀半径
-    rb0 = con[7]  # 激光束半径
-    base_factor = con[26]
-    sharpness_factor = con[27]
+    # 计算各段路径长度和方向向量即坐标
+    seg_lengths=[]
+    cos_theta=[]
+    sin_theta=[]
+    for i in range(len(cutter_info['segments'])):
+        seg_lengths.append(cutter_info['segments'][i]["length"])
+        cos_theta.append(cutter_info['segments'][i]["cos_theta"])
+        sin_theta.append(cutter_info['segments'][i]["sin_theta"])
+    total_length = cutter_info["total_length"]
 
-    point_of_one_pass = N * con[25]  # con[25]=100， 精确程度
-    Rb = Ret # 这里直接认为刀具有效半径等于铣刀半径
-    gm = 2 * np.arcsin(scWidth / 2 / Rb)  # 激光扫描角度范围
+    # 获得激光轨迹
+    Lw = ae + 2 * laser_r  # 考虑到激光源半径后的扫描半径
+    gm = 2 * np.arcsin(Lw / 2 / ret)  # 激光扫描角度范围
+    L1 = 2 * ret * gm
+    fr = fz * tooth_number  # 每转进给距离 (m/r)
+    fv = fr * nr / 60  # X方向进给率 (m/s)
+    vLaser1 = tooth_number * L1 * fv / laser_r / 2
+    T1 = L1 / vLaser1  # 激光扫描过一个周期的时间
 
-    # 计算总路径长度
-    total_length = 0.0
-    seg_lengths = []
-    for i in range(len(coordinates) - 1):
-        dx = coordinates[i + 1][0] - coordinates[i][0]
-        dy = coordinates[i + 1][1] - coordinates[i][1]
-        L = math.hypot(dx, dy)
-        seg_lengths.append(L)
-        total_length += L
+    point_of_one_pass = round(T1 / dt)  # 一个周期内扫描点数，是根据一个周期总长除以激光时间步长而
+    print(point_of_one_pass)
+
     if total_length == 0:
         total_length = 0.01
 
-    # 合速度与总时间
-    fx = con[15]  # X轴进给速度
-    fy = con[16]  # Y轴进给速度，假设为0
-    fv = math.sqrt(fx ** 2 + fy ** 2)
-    total_time = total_length / fv
+    # ===================== 轨迹生成（100%还原你的原始逻辑+时间延迟防重叠） =====================
+    laser_length = np.zeros(len(seg_lengths))
 
-    # 获取刀具轨迹段信息
-    # 为了获取段信息，先生成一个基础时间序列
-    tbs_temp = np.linspace(0.0, total_time, point_of_one_pass + 1)
-    _, _, seg_info = cutter_trajectory(tbs_temp, con, traj_type, params, coordinates)
-    segments = seg_info['segments'] if isinstance(seg_info, dict) and 'segments' in seg_info else []
+    period_num = []
+    tbs = []
+    x_cutter_v = []
+    y_cutter_v = []
+    xbs = []
+    ybs = []
 
-    # 计算每段基础时间长度和延申时间
-    seg_base_times = []
-    for seg in segments:
-        seg_base_times.append(seg['time'])
-
-    ext_time = Ret / fv  # 延申Ret长度所需时间
-    # 构建新的时间序列：每段基础时间 + 延申时间
-    # 总时间 = 所有段基础时间 + 段数 × 延申时间
-    new_total_time = total_time + len(segments) * ext_time
-
-    # 计算每段在新时间序列中的起始和结束时间
-    seg_new_start_times = []
-    seg_new_end_times = []
-    current_time = 0.0
-
-    for i, seg_base_time in enumerate(seg_base_times):
-        seg_new_start_times.append(current_time)
-        # 段的基础部分
-        current_time += seg_base_time
-        # 段的延申部分
-        current_time += ext_time
-        seg_new_end_times.append(current_time)
-
-    # 生成完整的时间序列（包含所有延申）
-    # 重新分配点数：每段的基础点数 + 延申点数
-    total_points = point_of_one_pass + len(segments) * int(ext_time / (total_time / point_of_one_pass))
-    tbs_full = np.linspace(0.0, new_total_time, total_points + 1)
-
-    # 计算刀具轨迹（包含延申）
-    # 需要修改cutter_trajectory函数以支持带延申的时间序列
-    # 这里我们手动计算
-    x_cutter_full = np.zeros_like(tbs_full)
-    y_cutter_full = np.zeros_like(tbs_full)
-
-    # 为每段计算刀具位置
-    for i, seg in enumerate(segments):
-        seg_start = seg_new_start_times[i]
-        seg_end_base = seg_start + seg['time']  # 基础部分结束
-        seg_end_ext = seg_new_end_times[i]  # 延申部分结束
-
-        # 找到属于当前段的时间点
-        seg_mask = (tbs_full >= seg_start) & (tbs_full <= seg_end_ext)
-        seg_times = tbs_full[seg_mask]
-
-        # 归一化时间
-        for j, t in enumerate(seg_times):
-            idx = np.where(tbs_full == t)[0][0]
-
-            if t <= seg_end_base:
-                # 基础部分：沿线段运动
-                local_time = t - seg_start
-                normalized_t = local_time / seg['time'] if seg['time'] > 0 else 0
-                normalized_t = max(0, min(1, normalized_t))
-                s = normalized_t * seg['length']
-
-                x_cutter_full[idx] = seg['start_point'][0] + s * seg['cos_theta']
-                y_cutter_full[idx] = seg['start_point'][1] + s * seg['sin_theta']
-            else:
-                # 延申部分：继续沿原方向运动
-                local_time = t - seg_end_base
-                s_ext = local_time * fv  # 延申距离
-
-                x_cutter_full[idx] = seg['end_point'][0] + seg['cos_theta'] * s_ext
-                y_cutter_full[idx] = seg['end_point'][1] + seg['sin_theta'] * s_ext
-
-    # 方向角与动态因子
-    theta_dynamic = calculate_theta(x_cutter_full, y_cutter_full, tbs_full)
-    angle_factors = dynamic_angle_factor(theta_dynamic, tbs_full, base_factor, sharpness_factor)
-
-    # 激光扫描学参数
-    L1 = 2 * Rb * gm
-    insertNr = 4
-    vLaser1 = insertNr * L1 / rb0 / 2 * fx
-    T1 = L1 / vLaser1
-
-    # 激光原始坐标（未旋转）
-    phi_b = -gm * np.cos(2 * np.pi / T1 * tbs_full) / 2
-    xbs = x_cutter_full + Rb * np.cos(phi_b)
-    ybs = y_cutter_full + Rb * np.sin(phi_b)
-    #(Ret/0.01)*2 *，实际上啊，这里并不需要乘上一个系数，因为铣削宽度就影响了激光扫描半径和切削区域对应的中心角
-    # 平移，使初始点对齐
-    xbs = xbs - xbs[0]
-
-    # 应用动态旋转
-    x_rotated_full = np.empty_like(xbs)
-    y_rotated_full = np.empty_like(ybs)
-    for i in range(len(tbs_full)):
-        theta_adjusted = theta_dynamic[i] * angle_factors[i]
-        xr, yr = rotate_coordinates(xbs[i], ybs[i], x_cutter_full[i], y_cutter_full[i], theta_adjusted)
-        x_rotated_full[i] = xr
-        y_rotated_full[i] = yr
-
-    # 构建掩码：去掉每段起点处Ret长度内的激光点（从第二段开始）
-    keep = np.ones(len(tbs_full), dtype=bool)
-
-    for i in range(1, len(segments)):  # 从第二段开始
-        seg_start_t = seg_new_start_times[i]
-        start_idx = int(np.searchsorted(tbs_full, seg_start_t, side='left'))
-
-        # 计算需要去掉的点数（对应Ret长度）
-        dt = tbs_full[1] - tbs_full[0] if len(tbs_full) > 1 else tbs_full[0]
-        ext_pts = int(np.ceil(ext_time / dt))
-
-        end_idx = min(start_idx + ext_pts, len(tbs_full))
-        if start_idx < end_idx:
-            keep[start_idx:end_idx] = False
-
-    # 应用掩码得到最终轨迹
-    x_rotated = x_rotated_full[keep]
-    y_rotated = y_rotated_full[keep]
-    tbs = tbs_full[keep]
-    theta_dynamic = theta_dynamic[keep]
-
-    return x_rotated, y_rotated, tbs, theta_dynamic, traj_type, params, seg_info
+    for i in range(len(seg_lengths)):
+        laser_length[i] = seg_lengths[i] + 0
+        Tc = laser_length[i] / fv # 刀具移动时间
+        period_num.append(Tc / T1)
 
 
+        # ✅【完全还原你的时间延迟代码】防止轨迹重叠！！！
+        if i == 0:
+            tbs.append(np.linspace(0, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
+            print("优化前各段周期数", round(period_num[i]))
+        else:
+            tbs.append(np.linspace(8 * T1, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
+            print("优化前各段周期数", round(period_num[i])-8)
+
+
+
+        # 你的原始刀具虚拟轨迹逻辑（完全不变）
+        x_cutter_v.append(x_cutter[i] + fv * cos_theta[i] * tbs[i])
+        y_cutter_v.append(y_cutter[i] + fv * sin_theta[i] * tbs[i])
+
+        # 调用函数计算瞬时方向角
+        theta = calculate_theta(x_cutter_v[i], y_cutter_v[i], tbs[i])
+        # 动态角度因子
+        angle_factor = dynamic_angle_factor(theta, tbs[i], base_factor=base_factor, sharpness_factor=sharpness_factor)
+        theta_adjusted = theta * angle_factor
+
+        # 你的原始激光局部轨迹（完全不变）
+        phi_b = -gm * np.cos(2 * np.pi / T1 * tbs[i]) / 2
+        x_laser_local = x_cutter_v[i] + ret * np.cos(phi_b)
+        y_laser_local = y_cutter_v[i] + ret * np.sin(phi_b)
+
+        # 动态旋转激光轨迹
+        x_rot, y_rot = rotate_coordinates(
+            x_laser_local, y_laser_local,
+            x_cutter_v[i], y_cutter_v[i],
+            theta_adjusted
+        )
+
+        xbs.append(x_rot)
+        ybs.append(y_rot)
+
+    # 展平轨迹点（原始逻辑不变）
+    # xbs = np.concatenate(xbs)
+    # ybs = np.concatenate(ybs)
+    #
+    # x_rotated = xbs
+    # y_rotated = ybs
+    return xbs, ybs, vLaser1
+
+
+# 这是获取优化后的激光轨迹
+def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cutter_info):
+    """
+    优化激光轨迹代码
+    """
+    # ===================== 1. 参数初始化（统一优质代码变量名） =====================
+    traj_type = traj_params['trajectory_type'].lower()
+    params = traj_params['params']
+
+    # 核心物理参数（与优质代码完全对齐）
+    ae = con["ae"]
+    ret = con['ret']  # 有效铣刀半径
+    laser_r = con['laser_r']  # 激光束半径
+    fz = con["fz"]  # 每齿进给量
+    tooth_number = con["tooth_number"]
+    nr = con["nr"]
+    # dt = con["dt"]  # 时间步长，即激光两点之间间隔时间
+    base_factor = con["base_factor"]
+    sharpness_factor = con["sharpness_factor"]
+
+    # 刀具分段信息（从坐标提取，替代原复杂cutter_trajectory）
+    seg_lengths = []
+    cos_theta = []
+    sin_theta = []
+    for i in range(len(cutter_info['segments'])):
+        seg_lengths.append(cutter_info['segments'][i]["length"])
+        cos_theta.append(cutter_info['segments'][i]["cos_theta"])
+        sin_theta.append(cutter_info['segments'][i]["sin_theta"])
+    total_length = cutter_info["total_length"]
+
+    # ===================== 2. 激光基础参数（与优质代码完全一致） =====================
+    Lw = ae + 2 * laser_r  # 考虑到激光源半径后的扫描半径
+    gm = 2 * np.arcsin(Lw / 2 / ret)
+    L1 = 2 * ret * gm
+    fr = fz * tooth_number
+    fv = fr * nr / 60
+    vLaser1 = tooth_number * L1 * fv / laser_r / 2
+    # T1 = L1 / vLaser1  # 激光单周期时间
+
+    # ===================== 3. 加载【.mat优化轨迹】（核心功能保留） =====================
+    x_mat = sio.loadmat("opt_path\\x_traj.mat")
+    y_mat = sio.loadmat("opt_path\\y_traj.mat")
+    x_cycle = np.asarray(x_mat['vector1']).flatten().astype(float)
+    y_cycle = np.asarray(y_mat['vector2']).flatten().astype(float)
+
+    # ===================== 新增核心：缩放 + 平移（精准满足要求） =====================
+    y_min = np.min(y_cycle)
+    y_max = np.max(y_cycle)
+    original_height = y_max - y_min
+    target_height = 2 * ret
+    scale_factor = target_height / original_height
+    y_scaled = y_cycle * scale_factor
+    x_final = []
+    y_final = []
+
+    for h in range(len(seg_lengths)):
+        target_start_x = x_cutter[h] + sin_theta[h] * ret*0.9
+        target_start_y = y_cutter[h] - cos_theta[h] * ret*0.9
+        if h>0:
+            target_start_x=target_start_x+cos_theta[h] * ret
+            target_start_y=target_start_y+sin_theta[h] * ret
+        x_final.append(x_cycle + (target_start_x - x_cycle[0]))
+        y_final.append(y_scaled + (target_start_y - y_scaled[0]))
+
+    step = (x_cycle.max() - x_cycle.min()) * 0.58
+
+    # ===================== 4. 分段生成轨迹（🔥 已修改：增加方向旋转） =====================
+    laser_length = np.zeros(len(seg_lengths))
+
+    # ===================== 3. 分段生成轨迹（每段内所有周期拼接为一个数组） =====================
+    xbs = []  # 每个元素是一段刀具轨迹对应的激光轨迹x坐标数组
+    ybs = []  # 每个元素是一段刀具轨迹对应的激光轨迹y坐标数组
+
+    for i in range(len(seg_lengths)):
+        laser_length[i] = seg_lengths[i] + ret
+        # print(round(laser_length[i] / step))
+        assert isinstance(laser_length[i], (float, int, np.number)), "laser_length[i] is not a number"
+        assert isinstance(step, (float, int, np.number)), "step is not a number"
+        if i == 0:
+            period_num = round(laser_length[i] / step+1e-9)
+        else:
+            period_num = round(seg_lengths[i] / step+ 1e-9)
+        print("优化后各段周期数", period_num)
+
+        # 获取当前段未旋转的轨迹（已平移至起点）
+        x_local = x_final[i]   # 数组
+        y_local = y_final[i]   # 数组
+        start_x = x_local[0]
+        start_y = y_local[0]
+        cos = cos_theta[i]
+        sin = sin_theta[i]
+
+        # 绕起点旋转到刀具方向
+        dx = x_local - start_x
+        dy = y_local - start_y
+        x_rot = start_x + dx * cos - dy * sin
+        y_rot = start_y + dx * sin + dy * cos
+        # 收集当前段所有周期的轨迹点（拼接）
+        seg_x_list = []
+        seg_y_list = []
+        # 收集当前段所有周期的轨迹点（拼接）
+        for j in range(period_num):
+            # 每个周期的轨迹（数组）
+            x_period = x_rot + j * step * cos
+            y_period = y_rot + j * step * sin
+            seg_x_list.append(x_period)
+            seg_y_list.append(y_period)
+        # 将当前段的所有周期拼接成一个完整的一维数组
+        xbs.append(np.concatenate(seg_x_list))
+        ybs.append(np.concatenate(seg_y_list))
+
+    # ===================== 5. 轨迹后处理（优质代码逻辑） =====================
+
+    return xbs, ybs, vLaser1

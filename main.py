@@ -9,23 +9,12 @@
 
 # ============================== 导入模块区 ==============================
 # 基础系统模块
-# import math
-# import traceback
 import sys
 import warnings
 from datetime import datetime
 import html
 
-# 数值计算与可视化模块
-# import numpy as np
-# from matplotlib.animation import FuncAnimation
-# import matplotlib.pyplot as plt
-
 # PyQt5 GUI相关模块
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QFileDialog, QVBoxLayout,
-    QWidget, QPushButton, QMessageBox
-)
 from PyQt5.QtCore import (
     QThread, pyqtSignal, pyqtSlot, QMetaObject, Qt
 )
@@ -36,8 +25,6 @@ from uniform_fun import traj_centered, laser_trajectory  # 轨迹相关工具函
 from traj_gen import *  # 轨迹生成核心函数
 from ui_main import Ui_MainWindow  # 主窗口UI
 from plot_disp import *  # 绘图显示相关函数
-# 找到你原有导入disp_plot的位置，新增：
-from plot_disp import InteractiveMatplotlibWidget
 
 # ============================== 全局配置 ==============================
 # 忽略弃用警告，避免控制台输出干扰
@@ -45,289 +32,284 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 # ============================== 热轨迹计算线程类 ==============================
-class HeatTrajThread(QThread):# 继承QObject/QThread（必须继承QObject才支持信号
-    """
-    热轨迹计算线程（后台执行，避免阻塞UI）
-    功能：根据激光轨迹计算温度场分布，支持普通算法和等弧长算法
-    信号说明：
-    - finished: 计算完成时发送，携带计算结果（包含温度数据、动画帧等）
-    - error: 计算出错时发送，携带错误信息
-    - status_update: 状态更新，携带(消息内容, 消息类型)
-    - progress_update: 进度更新，携带(进度百分比, 进度描述)
-    """
-    # 定义信号，定义了一个实例
-    finished = pyqtSignal(object)  # 计算完成信号，本质是pyqtSignal类的实例对象
-    error = pyqtSignal(str)  # 错误信号
-    status_update = pyqtSignal(str, str)  # 状态更新信号 (消息, 类型)
-    progress_update = pyqtSignal(float, str)  # 进度更新信号 (百分比, 描述)
+# 为了提升计算速率我进行了如下修改：
+# 降低网格分辨率，从300*300*25到100*100*10
+# 局部热源添加：不再生成整个网格的高斯分布，而是只计算激光中心周围有效区域（半径 3 倍光斑）内的网格点，大幅减少计算量。
+#
+# 预计算网格坐标：将 x, y, z 数组存储为实例变量，避免重复传递。
+#
+# 优化循环：减少不必要的数组拷贝和索引计算。
+class HeatTrajThread(QThread):
+    finished = pyqtSignal(object)
+    error = pyqtSignal(str)
+    status_update = pyqtSignal(str, str)
+    progress_update = pyqtSignal(float, str)
 
-    def __init__(self, params, traj_params, con, is_even=True ,x_laser=None, y_laser=None):
-        """
-        初始化热轨迹计算线程
-        参数：
-        - params: 公共参数字典（包含材料属性、激光参数等）
-        - traj_params: 轨迹参数（轨迹类型、正弦/锯齿波参数等）
-        - con: 配置数组（传递给轨迹生成函数）
-        - is_even: 是否使用等弧长算法（True=等弧长，False=普通算法）
-        """
+    def __init__(self, con_array, common_params, traj_params, is_even=False, x_laser=None, y_laser=None, vLaser=0):
         super().__init__()
-
-        # 输入参数保存
-        self.params = params
+        self.con = con_array
+        self.params = common_params
         self.traj_params = traj_params
-        self.con = con
-        self.is_even=is_even
-
-        # 动画相关配置
-        self.save_animation = True  # 是否保存动画帧
-        self.animation_frames = []  # 存储温度场动画帧（二维切片）
-        self.animation_frame_times = []  # 存储每个动画帧对应的时间
-
-        # 外来激光坐标
-        # 新增：保存传入的激光轨迹（不再自行计算）
+        self.is_even = is_even
+        self.save_animation = True
+        self.animation_frames = []
+        self.animation_frame_times = []
         self.x_laser = x_laser
         self.y_laser = y_laser
+        self.vLaser = vLaser
 
     def run(self):
-        """
-        线程执行入口（自动调用）
-        执行流程：
-        1. 初始化计算参数
-        2. 生成激光/刀具轨迹
-        3. 根据算法类型计算温度场(可以修改成普通算法和智能“优化”算法）
-        4. 收集动画帧数据
-        5. 发送计算结果
-        """
         try:
-            # 步骤1：发送计算开始状态
-            self.status_update.emit(f"开始计算温度场，使用等弧长采样算法", "info")
+            self.status_update.emit("开始计算温度场", "info")
 
-            # 步骤2：初始化离散化参数（温度场计算的网格配置）
-            # 网格尺寸（x/y/z方向的网格数）
-            nx, ny, nz = 300, 300, 25
-            # 物理尺寸（米）：计算区域的实际大小
-            Lx, Ly, Lz = 0.05, 0.05, 0.005
-            # 网格步长（米/格）
+            # 网格参数（已降低分辨率以加速）
+            nx, ny, nz = 200, 200, 10
+            Lx, Ly, Lz = 0.1, 0.1, 0.005
             dx, dy, dz = Lx / (nx - 1), Ly / (ny - 1), Lz / (nz - 1)
-            # 时间步长（秒）- 普通算法使用，对于等弧长采样算法使用计算的dt_max_stable来保持稳定，等下可以删除
-            dt = 0.0002
-            # 初始化温度场（300K，室温）
+            dt = self.con["dt"]
             T = np.ones((nx, ny, nz)) * 300
 
-            # 轨迹坐标（暂不中心化，使用原始旋转后坐标）
             x_traj_centered, y_traj_centered = self.x_laser, self.y_laser
+            nt = int(len(x_traj_centered))
+            print(f"轨迹点数: {nt}")
 
-            # 步骤4：初始化温度场计算的基础变量
-            nt = len(x_traj_centered)  # 时间步数（轨迹点数量），为了显示最后一刻的温度场，所以要以轨迹点数量为nt，总时长为dt*nt
-            # 生成刀具轨迹和激光轨迹画布大小
-
-            # 生成网格坐标数组，温度场范围
-            x = np.linspace(-0.01, Lx, nx)
-            y = np.linspace(-0.01, Ly, ny)
+            # 网格坐标（用于局部热源添加）
+            x = np.linspace(-0.02, Lx, nx)
+            y = np.linspace(-0.02, Ly, ny)
             z = np.linspace(-Lz / 2, Lz / 2, nz)
-            # 热扩散系数 (α = k/(ρ·cp))
+
             alpha = self.params['k'] / (self.params['cp'] * self.params['rho'])
+            vLaser = self.vLaser
 
-            # 步骤5：定义高斯热源函数（激光热源模型）
-            def gaussian_heat_source(P, r, x, y, z, x_center, y_center, z_center, source_radius):
-                """
-                高斯分布热源模型
-                参数：
-                - P: 激光功率 (W)
-                - r: 热源特征半径 (m)
-                - x/y/z: 网格坐标数组
-                - x_center/y_center/z_center: 热源中心位置
-                - source_radius: 热源有效半径 (m)
-                返回：热源强度分布数组
-                """
-                x_grid, y_grid, z_grid = np.meshgrid(x, y, z, indexing='ij')
-                return (P / ((2 * np.pi * r ** 2) ** 1.5)) * np.exp(
-                    -((x_grid - x_center) ** 2 +
-                      (y_grid - y_center) ** 2 +
-                      (z_grid - z[z_center]) ** 2) / (2 * r ** 2)
-                )
+            # 预计算激光参数
+            P = self.params['laser_p']
+            r = self.params['laser_r']
+            rho_cp = self.params['rho'] * self.params['cp']
 
-            # 步骤6：配置计算过程的辅助参数
-            self.status_update.emit(f"开始计算温度场，总共 {nt} 个时间步...", "info")
-            progress_interval = max(1, nt // 20)  # 进度更新间隔（每5%更新一次）
-            animation_interval = max(1, nt // 50)  # 动画帧采集间隔（最多50帧，就是50个步长）
+            self.status_update.emit(f"开始计算温度场，总共 {nt} 个时间步，共计 {nt*dt:.2f} s", "info")
+            progress_interval = max(1, nt // 20)
+            animation_interval = max(1, nt // 50)
 
-            # 初始化动画帧存储
             self.animation_frames = []
             self.animation_frame_times = []
-            # 保存初始状态帧
             if self.save_animation:
                 self.animation_frames.append(T[:, :, nz // 2].copy())
                 self.animation_frame_times.append(0.0)
 
-            # 步骤7：等弧长计算温度场
             if self.is_even:
                 self._calculate_even_arc_length(
-                    T, x, y, z, alpha, dx, dy, dz,
-                    x_traj_centered, y_traj_centered,
-                    nt, progress_interval, animation_interval,
-                    gaussian_heat_source
+                    T, x, y, z, dt, dx, dy, dz, alpha,
+                    x_traj_centered, y_traj_centered, nt,
+                    P, r, rho_cp, vLaser,
+                    progress_interval, animation_interval
                 )
 
+            else:
+                self._calculate_normal(
+                    T, x, y, z, dt, dx, dy, dz, alpha,
+                    x_traj_centered, y_traj_centered, nt,
+                    P, r, rho_cp,
+                    progress_interval, animation_interval
+                )
 
-            # 步骤8：封装并发送计算结果，为了在主界面上显示最后一刻温度场和温度场变化动画
             result = {
-                'x': x,  # x方向网格坐标
-                'y': y,  # y方向网格坐标
-                'nz': nz,  # z方向网格数
-                'T': T,  # 最终温度场数据
-                'traj_type': "line",  # 轨迹类型
-                'method': 'even' ,  # 温度计算方法
-                'animation_frames': self.animation_frames if self.save_animation else None, # 保存的动画帧，显示动画
+                'x': x, 'y': y, 'nz': nz, 'T': T, 'traj_type': "line",
+                'method': 'even' if self.is_even==True else "normal",
+                'animation_frames': self.animation_frames if self.save_animation else None,
                 'animation_frame_times': self.animation_frame_times if self.save_animation else None
             }
             self.finished.emit(result)
 
         except Exception as e:
-            # 捕获异常并发送错误信号
             self.error.emit(f"计算错误: {e}")
             traceback.print_exc()
 
-    def _calculate_even_arc_length(self, T, x, y, z, alpha, dx, dy, dz,
-                                   x_traj, y_traj, nt, progress_interval,
-                                   animation_interval, heat_source_func):
-        """
-        原始等弧长算法计算温度场（目的是为了保证激光移动速度恒定）
-        参数：
-        - T: 温度场数组
-        - x/y/z: 网格坐标数组
-        - alpha: 热扩散系数
-        - dx/dy/dz: 网格步长
-        - x_traj/y_traj: 轨迹坐标
-        - nt: 时间步数
-        - progress_interval: 进度更新间隔
-        - animation_interval: 动画帧采集间隔
-        - heat_source_func: 热源函数
-        """
-        # 激光扫描速度（米/秒）,这里先固定为2m/s
-        v = 2
-
-        # 计算稳定条件下的最大时间步长，这里先固定为1/6
+    def _calculate_even_arc_length(self, T, x, y, z, dt, dx, dy, dz, alpha,
+                                   x_traj, y_traj, nt, P, r, rho_cp, vLaser,
+                                   progress_interval, animation_interval):
+        """等弧长算法 - 使用局部热源添加优化"""
+        v = vLaser
         C = 1 / 6.0
-        sum_inv_d2 = (1 / dx ** 2 + 1 / dy ** 2 + 1 / dz ** 2)
+        sum_inv_d2 = (1/dx**2 + 1/dy**2 + 1/dz**2)
         dt_max_stable = C / (alpha * sum_inv_d2)
-        self.status_update.emit(f"理论上为保证扩散稳定，dt 需 <= {dt_max_stable:.6g} s", "info")
+        self.status_update.emit(f"稳定时间步长上限: {dt_max_stable:.6g} s", "info")
 
-        # 计算每段轨迹的距离和对应的时间步长
-        ds = []
-        for i in range(1, nt): # 计算原始轨迹累计弧长
-            dist_i = np.sqrt((x_traj[i] - x_traj[i - 1]) ** 2 + (y_traj[i] - y_traj[i - 1]) ** 2)
-            ds.append(dist_i)
-        ds = np.array(ds)
-        dt_array = ds / v  # 每段的时间步长
+        # 计算每段距离和实际时间步长
+        ds = np.sqrt(np.diff(x_traj)**2 + np.diff(y_traj)**2)
+        dt_array = ds / v
+        if dt_max_stable>dt:
+            dt_max_stable=dt
 
-        # 计算每段需要的子步数（保证稳定性）
-        M_list = []
-        for dt_i in dt_array:
-            M_i = 1 if dt_i <= dt_max_stable else math.ceil(dt_i / dt_max_stable) # 保证时间步长均在dt_max_stable内
-            M_list.append(M_i)
+        M_list = np.maximum(1, np.ceil(dt_array / dt_max_stable)).astype(int)
 
-        # 逐段计算温度场
+        total_segments = nt - 1
         current_time = 0.0
-        for t in range(1, nt):
-            dt_i = dt_array[t - 1]
-            M_i = M_list[t - 1]
-            sub_dt = dt_i / M_i  # 子时间步长
 
-            # 子步迭代（保证数值稳定性）
+        # 预计算网格范围和步长（用于局部热源索引）
+        nx, ny, nz = T.shape
+        x_min, x_max = x[0], x[-1]
+        y_min, y_max = y[0], y[-1]
+        z_mid = nz // 2
+
+        # 热源有效半径（3倍光斑半径）
+        r_eff = 3 * r
+        # 预计算高斯归一化系数
+        norm_factor = P / ((2 * np.pi * r**2) ** 1.5)
+
+        # 进度更新间隔（每 2% 更新一次）
+        progress_step = max(1, total_segments // 50)
+        anim_step = max(1, total_segments // 50)   # 最多 50 帧动画
+
+        for idx in range(total_segments):
+            # 定期让出 CPU，使 UI 有机会响应
+            if idx % 100 == 0:
+                self.msleep(1)
+
+            dt_i = dt_array[idx]
+            M_i = M_list[idx]
+            sub_dt = dt_i / M_i
+
+            # 当前段起点和终点坐标
+            x0, x1 = x_traj[idx], x_traj[idx+1]
+            y0, y1 = y_traj[idx], y_traj[idx+1]
+
             for m in range(M_i):
-                frac = (m + 1) / M_i # 生成等间隔目标弧长
-                # 反插值得到等弧长采样各热源中心位置
-                x_center = x_traj[t - 1] + frac * (x_traj[t] - x_traj[t - 1])
-                y_center = y_traj[t - 1] + frac * (y_traj[t] - y_traj[t - 1])
-                z_center = len(z) // 2  # z方向中间层
+                frac = (m + 1) / M_i
+                xc = x0 + frac * (x1 - x0)
+                yc = y0 + frac * (y1 - y0)
+                zc = z_mid
 
-                # 计算热源分布
-                q = heat_source_func(
-                    self.params['source_power'], self.params['rb0'],
-                    x, y, z, x_center, y_center, z_center, self.params['rb0']
+                # ----- 热传导扩散更新（向量化）-----
+                T[1:-1, 1:-1, 1:-1] += alpha * sub_dt * (
+                    (T[2:, 1:-1, 1:-1] - 2*T[1:-1, 1:-1, 1:-1] + T[:-2, 1:-1, 1:-1]) / dx**2 +
+                    (T[1:-1, 2:, 1:-1] - 2*T[1:-1, 1:-1, 1:-1] + T[1:-1, :-2, 1:-1]) / dy**2 +
+                    (T[1:-1, 1:-1, 2:] - 2*T[1:-1, 1:-1, 1:-1] + T[1:-1, 1:-1, :-2]) / dz**2
                 )
 
-                # 更新温度场（热传导方程）
-                T[1:-1, 1:-1, 1:-1] += (
-                        alpha * sub_dt * (
-                        (T[2:, 1:-1, 1:-1] - 2 * T[1:-1, 1:-1, 1:-1] + T[:-2, 1:-1, 1:-1]) / dx ** 2 +
-                        (T[1:-1, 2:, 1:-1] - 2 * T[1:-1, 1:-1, 1:-1] + T[1:-1, :-2, 1:-1]) / dy ** 2 +
-                        (T[1:-1, 1:-1, 2:] - 2 * T[1:-1, 1:-1, 1:-1] + T[1:-1, 1:-1, :-2]) / dz ** 2
-                ) + sub_dt * q[1:-1, 1:-1, 1:-1] / (self.params['rho'] * self.params['cp'])
-                )
+                # ----- 局部高斯热源添加（优化核心）-----
+                # 确定影响范围在网格上的索引边界
+                ix_min = max(0, int(np.searchsorted(x, xc - r_eff)) - 1)
+                ix_max = min(nx, int(np.searchsorted(x, xc + r_eff)) + 1)
+                iy_min = max(0, int(np.searchsorted(y, yc - r_eff)) - 1)
+                iy_max = min(ny, int(np.searchsorted(y, yc + r_eff)) + 1)
+                # z方向只考虑中间层附近（因为z范围很小，且热源集中在中间）
+                iz_min = max(0, zc - 2)
+                iz_max = min(nz, zc + 3)
 
-            # 更新时间
+                # 提取子网格坐标
+                x_sub = x[ix_min:ix_max]
+                y_sub = y[iy_min:iy_max]
+                z_sub = z[iz_min:iz_max]
+                # 计算子网格上各点到热源中心的距离平方
+                X, Y, Z = np.meshgrid(x_sub, y_sub, z_sub, indexing='ij')
+                dist2 = (X - xc)**2 + (Y - yc)**2 + (Z - z[zc])**2
+                # 计算高斯热源值（只对有效半径内）
+                q_sub = norm_factor * np.exp(-dist2 / (2 * r**2))
+                # 加到温度场的对应子区域
+                T[ix_min:ix_max, iy_min:iy_max, iz_min:iz_max] += sub_dt * q_sub / rho_cp
+
             current_time += dt_i
 
-            # 采集动画帧
-            if self.save_animation and t % animation_interval == 0:
-                self.animation_frames.append(T[:, :, len(z) // 2].copy())
+            # 采集动画帧（限制最大帧数 100）
+            if self.save_animation and idx % anim_step == 0 and len(self.animation_frames) < 100:
+                self.animation_frames.append(T[:, :, nz // 2].copy())
                 self.animation_frame_times.append(current_time)
 
             # 更新进度
-            if t % progress_interval == 0:
-                progress = t / (nt - 1) * 100
-                self.progress_update.emit(
-                    progress, f"正在计算温度场... 进度: {progress:.0f}% ({t}/{nt - 1}段)"
-                )
+            if idx % progress_step == 0:
+                progress = (idx + 1) / total_segments * 100
+                self.progress_update.emit(progress, f"计算温度场... {progress:.0f}% ({idx + 1}/{total_segments})")
 
         # 保存最后一帧
-        if self.save_animation:
-            self.animation_frames.append(T[:, :, len(z) // 2].copy())
+        if self.save_animation and len(self.animation_frames) < 100:
+            self.animation_frames.append(T[:, :, nz // 2].copy())
             self.animation_frame_times.append(current_time)
 
         self.status_update.emit("温度场计算完成！", "success")
 
-    # def _calculate_normal(self, T, x, y, z, alpha, dx, dy, dz, dt,
-    #                       x_traj, y_traj, nt, progress_interval,
-    #                       animation_interval, heat_source_func):
-    #     """
-    #     智能优化算法计算温度场（固定时间步长）
-    #     参数同等弧长算法，新增dt参数（固定时间步长）
-    #     """
-    #     current_time = 0.0
-    #     for t in range(1, nt):
-    #         # 获取当前热源中心位置
-    #         x_center, y_center, z_center = laser_trajectory(t, x_traj, y_traj, len(z))
-    #
-    #         # 计算热源分布
-    #         q = heat_source_func(
-    #             self.params['source_power'], self.params['rb0'],
-    #             x, y, z, x_center, y_center, z_center, self.params['rb0']
-    #         )
-    #
-    #         # 更新温度场（热传导方程）
-    #         T[1:-1, 1:-1, 1:-1] += (
-    #                 alpha * dt * (
-    #                 (T[2:, 1:-1, 1:-1] - 2 * T[1:-1, 1:-1, 1:-1] + T[:-2, 1:-1, 1:-1]) / dx ** 2 +
-    #                 (T[1:-1, 2:, 1:-1] - 2 * T[1:-1, 1:-1, 1:-1] + T[1:-1, :-2, 1:-1]) / dy ** 2 +
-    #                 (T[1:-1, 1:-1, 2:] - 2 * T[1:-1, 1:-1, 1:-1] + T[1:-1, 1:-1, :-2]) / dz ** 2
-    #         ) + dt * q[1:-1, 1:-1, 1:-1] / (self.params['rho'] * self.params['cp'])
-    #         )
-    #
-    #         # 更新时间
-    #         current_time += dt
-    #
-    #         # 采集动画帧
-    #         if self.save_animation and t % animation_interval == 0:
-    #             self.animation_frames.append(T[:, :, len(z) // 2].copy())
-    #             self.animation_frame_times.append(current_time)
-    #
-    #         # 更新进度
-    #         if t % progress_interval == 0:
-    #             progress = t / nt * 100
-    #             self.progress_update.emit(
-    #                 progress, f"正在计算温度场... 进度: {progress:.0f}% ({t}/{nt}步)"
-    #             )
-    #
-    #     # 保存最后一帧
-    #     if self.save_animation:
-    #         self.animation_frames.append(T[:, :, len(z) // 2].copy())
-    #         self.animation_frame_times.append(current_time)
-    #
-    #     self.status_update.emit("温度场计算完成！", "success")
+    def _calculate_normal(self, T, x, y, z, dt, dx, dy, dz, alpha,
+                                   x_traj, y_traj, nt, P, r, rho_cp,
+                                   progress_interval, animation_interval):
+        """固定时间步长算法 - 每个轨迹点对应一个 dt，不依赖弧长"""
+        C = 1 / 6.0
+        sum_inv_d2 = (1 / dx ** 2 + 1 / dy ** 2 + 1 / dz ** 2)
+        dt_max_stable = C / (alpha * sum_inv_d2)
+        self.status_update.emit(f"稳定时间步长上限: {dt_max_stable:.6g} s", "info")
 
+        # 确保 dt 不大于稳定上限，否则拆分子步
+        if dt <= dt_max_stable:
+            M = 1
+            sub_dt = dt
+        else:
+            M = int(np.ceil(dt / dt_max_stable))
+            sub_dt = dt / M
+            self.status_update.emit(f"dt={dt:.6g}s 超过稳定上限，将每个步长拆分为 {M} 个子步", "info")
+
+        total_steps = nt  # 共有 nt 个轨迹点（每个点对应一个时间步）
+        current_time = 0.0
+
+        # 预计算网格参数
+        nx, ny, nz = T.shape
+        z_mid = nz // 2
+        r_eff = 3 * r
+        norm_factor = P / ((2 * np.pi * r ** 2) ** 1.5)
+
+        progress_step = max(1, total_steps // 50)
+        anim_step = max(1, total_steps // 50)
+
+        for idx in range(total_steps):
+            # 定期让出 CPU
+            if idx % 100 == 0:
+                self.msleep(1)
+
+            # 当前热源中心位置（直接使用轨迹点）
+            xc = x_traj[idx]
+            yc = y_traj[idx]
+            zc = z_mid
+
+            # 将一个时间步 dt 拆分为 M 个子步
+            for _ in range(M):
+                # 热传导扩散更新
+                T[1:-1, 1:-1, 1:-1] += alpha * sub_dt * (
+                        (T[2:, 1:-1, 1:-1] - 2 * T[1:-1, 1:-1, 1:-1] + T[:-2, 1:-1, 1:-1]) / dx ** 2 +
+                        (T[1:-1, 2:, 1:-1] - 2 * T[1:-1, 1:-1, 1:-1] + T[1:-1, :-2, 1:-1]) / dy ** 2 +
+                        (T[1:-1, 1:-1, 2:] - 2 * T[1:-1, 1:-1, 1:-1] + T[1:-1, 1:-1, :-2]) / dz ** 2
+                )
+
+                # 局部高斯热源添加
+                ix_min = max(0, int(np.searchsorted(x, xc - r_eff)) - 1)
+                ix_max = min(nx, int(np.searchsorted(x, xc + r_eff)) + 1)
+                iy_min = max(0, int(np.searchsorted(y, yc - r_eff)) - 1)
+                iy_max = min(ny, int(np.searchsorted(y, yc + r_eff)) + 1)
+                iz_min = max(0, zc - 2)
+                iz_max = min(nz, zc + 3)
+
+                x_sub = x[ix_min:ix_max]
+                y_sub = y[iy_min:iy_max]
+                z_sub = z[iz_min:iz_max]
+                X, Y, Z = np.meshgrid(x_sub, y_sub, z_sub, indexing='ij')
+                dist2 = (X - xc) ** 2 + (Y - yc) ** 2 + (Z - z[zc]) ** 2
+                q_sub = norm_factor * np.exp(-dist2 / (2 * r ** 2))
+                T[ix_min:ix_max, iy_min:iy_max, iz_min:iz_max] += sub_dt * q_sub / rho_cp
+
+            current_time += dt
+
+            # 采集动画帧
+            if self.save_animation and idx % anim_step == 0 and len(self.animation_frames) < 100:
+                self.animation_frames.append(T[:, :, nz // 2].copy())
+                self.animation_frame_times.append(current_time)
+
+            # 更新进度
+            if idx % progress_step == 0:
+                progress = (idx + 1) / total_steps * 100
+                self.progress_update.emit(progress, f"计算温度场... {progress:.0f}% ({idx + 1}/{total_steps})")
+
+        # 保存最后一帧
+        if self.save_animation and len(self.animation_frames) < 100:
+            self.animation_frames.append(T[:, :, nz // 2].copy())
+            self.animation_frame_times.append(current_time)
+
+        self.status_update.emit("温度场计算完成！", "success")
 
 # ============================== 主窗口类 ==============================
 class MyWindow(QMainWindow, Ui_MainWindow):
@@ -360,51 +342,171 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.heat_thread = None  # 热轨迹计算线程
         self.heat_animation_timer = None  # 动画定时器
         self.heat_animation_canvas = None  # 动画画布
-        self.heat_animation_controller = None  # 动画控制器
 
-        # 4. 绑定UI控件事件,也是定义的函数
+        # 4. 绑定UI控件事件
         self._bind_ui_events()
 
-        # 5. 初始化默认配置,这些函数都是下面定义的
+        # 5. 初始化默认配置
         self.set_default_values()  # 设置默认参数
         self.init_status_frame()  # 初始化状态显示区
         self.disable_animation_buttons()  # 初始禁用动画按钮
         # 定义刀具和激光轨迹x，y画布范围
-        Lx, Ly, Lz = 0.05, 0.05, 0.005
-        self.x_scope = [-0.01, Lx]
-        self.y_scope = [-0.01, Ly]
+        Lx, Ly, Lz = 0.1, 0.1, 0.005
+        self.x_scope = [-0.02, Lx]
+        self.y_scope = [-0.02, Ly]
         # 定义激光轨迹点
-        self.x_laser=[]
-        self.y_laser=[]
+        self.x_laser = []
+        self.y_laser = []
+        self.vLaser = 0
 
-        # 6.新增：初始化交互式绘图控件（替代原有的QLabel）,实际上你在UI文件里面创建后就不用重复设了
-        # self.cutter_plot_widget = InteractiveMatplotlibWidget()
-        # self.laser_plot_widget = InteractiveMatplotlibWidget()
+        # 存储各图最新数据（用于页面切换后刷新）
+        self.cutter_data = None  # 刀具轨迹数据
+        self.laser_data = None  # 激光轨迹数据
+        self.heat_data = None  # 热场数据（含动画帧）
+        self.heat_animation_controller = None  # 动画控制器
+
+        self.switch_to_page(0)  # 默认显示刀具轨迹页
 
     # ========================== UI事件绑定 ==========================
     def _bind_ui_events(self):
         """绑定所有UI控件和相应事件处理函数"""
         # 轨迹生成按钮
-        self.btn_cutter.clicked.connect(self.cutter_traj_gen)  # 按下按钮后，执行生成刀具轨迹的函数
-        self.btn_laser.clicked.connect(self.laser_traj_gen)  # 生成激光轨迹
+        self.btn_cutter.clicked.connect(self.cutter_traj_gen)
+        self.btn_laser.clicked.connect(self.laser_traj_gen)
 
-        # 温度场计算按钮,
-        self.btn_heat_even.clicked.connect(self.heat_traj_gen_even)  # 等弧长算法
+        # 温度场计算按钮
+        self.btn_heat_even.clicked.connect(self.heat_traj_gen_even)
         # 激光轨迹智能优化按钮
-        # self.btn_opt_laser.clicked.connect(self.heat_traj_gen)  # 智能优化激光轨迹
+        self.btn_opt_laser.clicked.connect(self.laser_traj_optimize)
 
         # 坐标输入按钮
-        self.btn_open_coords.clicked.connect(self.open_coord_dialog)  # 打开坐标对话框
+        self.btn_open_coords.clicked.connect(self.open_coord_dialog)
 
         # 轨迹类型选择框
         self.comboBox_trajectory_type.setCurrentIndex(0)
         self.stackedWidget_params.setCurrentIndex(0)
         self.comboBox_trajectory_type.currentIndexChanged.connect(self.get_trajectory_parameters)
 
+        # 页面切换按钮
+        self.btn_cutter_change.clicked.connect(lambda: self.switch_to_page(0))
+        self.btn_laser_change.clicked.connect(lambda: self.switch_to_page(1))
+        self.btn_heat_change.clicked.connect(lambda: self.switch_to_page(2))
+
         # 动画控制按钮（后续动态绑定）
         self.connect_animation_buttons()
 
+    # ========================== 页面切换逻辑 ==========================
+    def switch_to_page(self, index):
+        """0:刀具轨迹, 1:激光轨迹, 2:热场"""
+        old_index = self.stackedWidget.currentIndex()
+        self.stackedWidget.setCurrentIndex(index)
 
+        # 离开热场页面时暂停动画
+        if old_index == 2 and self.heat_animation_controller:
+            if self.heat_animation_controller.is_playing:
+                self.heat_animation_controller.pause()
+                self.update_animation_button_states(is_playing=False)
+
+        # 刷新当前页面显示
+        if index == 0:
+            self._refresh_cutter_display()
+        elif index == 1:
+            self._refresh_laser_display()
+        elif index == 2:
+            self._refresh_heat_display()
+
+    def _refresh_cutter_display(self):
+        if self.cutter_data is None:
+            self.show_status_message("尚未生成刀具轨迹", "warning")
+            return
+        fig = cutter_matplotlib_plot(
+            self.cutter_data['x'], self.cutter_data['y'],
+            self.cutter_data['ret'], self.cutter_data['x_scope'], self.cutter_data['y_scope']
+        )
+        display_plot_on_label(fig, self.cutter_plot_display)
+
+    def _refresh_laser_display(self):
+        if self.laser_data is None:
+            self.show_status_message("尚未生成激光轨迹", "warning")
+            return
+        fig = laser_matplotlib_plot(
+            self.laser_data['x_cutter'], self.laser_data['y_cutter'],
+            self.laser_data['ret'], self.laser_data['rb0'],
+            self.laser_data['x_laser'], self.laser_data['y_laser'],
+            self.laser_data['x_scope'], self.laser_data['y_scope'],
+            self.laser_data['is_opt']
+        )
+        self.laser_plot_widget.set_figure(fig)
+
+        # ==================== 热场显示与动画核心修改（简化版） ====================
+
+    def _refresh_heat_display(self):
+        """刷新热场页面显示（静态图 + 动画） - 安全替换版"""
+        if self.heat_data is None:
+            self.show_status_message("尚未生成热场图", "warning")
+            return
+
+        # 1. 显示静态温度场图（与原逻辑相同）
+        try:
+            fig = heat_even_matplotlib_plot(
+                self.heat_data['x'], self.heat_data['y'],
+                self.heat_data['nz'], self.heat_data['T'],
+                self.heat_data['traj_type']
+            )
+            display_plot_on_label(fig, self.heat_plot_display)
+        except Exception as e:
+            self.show_status_message(f"静态温度场图绘制失败: {e}", "error")
+            traceback.print_exc()
+
+        # 2. 处理动画部分：安全替换
+        container = self.heat_animation_container
+
+        # 停止并销毁旧动画控制器
+        if self.heat_animation_controller is not None:
+            self.heat_animation_controller.close()
+            self.heat_animation_controller = None
+
+        # 清空容器中的所有子控件（保留布局结构）
+        layout = container.layout()
+        if layout is None:
+            layout = QVBoxLayout(container)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+        else:
+            # 移除所有子控件，但不删除布局
+            while layout.count():
+                child = layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+
+        # 3. 如果有动画数据，创建新的动画控制器
+        if (self.heat_data.get('animation_frames') and
+                self.heat_data.get('animation_frame_times') and
+                len(self.heat_data['animation_frames']) > 0):
+            try:
+                # 创建控制器，它会将自己的画布添加到布局中
+                self.heat_animation_controller = HeatAnimationController(
+                    container, layout,  # 传入容器和布局
+                    self.heat_data['x'], self.heat_data['y'],
+                    self.heat_data['animation_frames'],
+                    self.heat_data['animation_frame_times'],
+                    self.heat_data['traj_type']
+                )
+                if self.heat_animation_controller and self.heat_animation_controller.canvas:
+                    self.connect_animation_buttons()
+                    self.enable_animation_buttons()
+                    self.update_animation_button_states(is_playing=False)
+                    self.show_status_message("动画加载成功", "success")
+                else:
+                    self.disable_animation_buttons()
+                    self.show_status_message("动画创建失败", "error")
+            except Exception as e:
+                self.disable_animation_buttons()
+                self.show_status_message(f"创建动画时发生异常: {e}", "error")
+                traceback.print_exc()
+        else:
+            self.disable_animation_buttons()
+            self.show_status_message("无动画数据", "warning")
 
     # ========================== 状态消息管理 ==========================
     def init_status_frame(self):
@@ -502,17 +604,16 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         try:
             # 默认参数字典（键：控件名，值：默认值）
             default_params = {
-                "lineEdit_Det": "10e-3",  # 刀具直径 (m)
-                "lineEdit_ae": "7.5e-3",  # 切削宽度 (m)
+                "lineEdit_Det": "15e-3",  # 刀具直径 (m)
+                "lineEdit_ae": "12e-3",  # 切削宽度 (m)
                 "lineEdit_ap": "-0.26e-3",  # 切削深度 (m)
-                "lineEdit_nC": "474/60",  # 主轴转速 (r/s)
+                "lineEdit_nC": "474",  # 主轴转速 (r/min) # 这两个参数其实应该可以合并
                 "lineEdit_fz": "0.5e-3",  # 每齿进给量 (m)
                 "lineEdit_k": "15",  # 热传导系数 (W/(m·K))
                 "lineEdit_rho": "7800",  # 材料密度 (kg/m³)
                 "lineEdit_cp": "500",  # 比热容 (J/(kg·K))
                 "lineEdit_source_power": "2000",  # 激光功率 (W)
-                "lineEdit_rb0": "1e-3",  # 激光光斑半径 (m)
-                "lineEdit_N": "8"  # 轨迹采样数
+                "lineEdit_rb0": "1.5e-3",  # 激光光斑半径 (m)
             }
 
             # 设置默认值
@@ -575,43 +676,26 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         return traj_params
 
     def _get_common_parameters(self):
-        """提取所有公共参数，包括输入参数（材料、激光、切削参数）和计算得到的参数fx，也是在计算轨迹和温度场时调用"""
+        """提取所有输入参数（材料、激光、切削参数），也是在计算轨迹和温度场时调用"""
         try:
             # 从UI控件读取参数
-            Ret = float(self.lineEdit_Det.text()) / 2  # 刀具半径 (m)
+            ret = float(self.lineEdit_Det.text()) / 2  # 刀具有效半径 (m)
             ae = float(self.lineEdit_ae.text())  # 切削宽度 (m)
             ap = float(self.lineEdit_ap.text())  # 切削深度 (m)
-            nC = eval(self.lineEdit_nC.text())  # 主轴转速 (r/s)
-            fz = float(self.lineEdit_fz.text())  # 每齿进给量 (m)
+            nr = eval(self.lineEdit_nC.text())  # 主轴转速 (r/min)
+            # fz = float(self.lineEdit_fz.text())  # 每齿进给量 (m)
             k = float(self.lineEdit_k.text())  # 热传导系数 (W/(m·K))
             rho = float(self.lineEdit_rho.text())  # 材料密度 (kg/m³)
             cp = float(self.lineEdit_cp.text())  # 比热容 (J/(kg·K))
-            source_power = float(self.lineEdit_source_power.text())  # 激光功率 (W)
-            rb0 = eval(self.lineEdit_rb0.text())  # 激光光斑半径 (m)
-            N = int(self.lineEdit_N.text())  # 轨迹采样数
+            laser_p = float(self.lineEdit_source_power.text())  # 激光功率 (W)
+            laser_r = eval(self.lineEdit_rb0.text())  # 激光光斑半径 (m)
 
-            # 计算派生参数
-            wC = nC * 2 * np.pi  # 主轴角速度 (rad/s)
-            betaC = 2 * np.arcsin(ae / 2 / Ret)  # 切削角 (rad)
-            fr = fz * 4  # 进给率 (m/s)
-            fx = fr * nC  # X方向进给率 (m/s)
-            fy = 0
-
-            # 获取坐标起点
-            if self.coordinates:
-                X0Cutter = self.coordinates[0][0]
-                Y0Cutter = self.coordinates[0][1]
-            else:
-                X0Cutter = 0.0
-                Y0Cutter = 0.0
-                self.show_status_message("警告：坐标列表为空，使用默认起点 (0,0)", "warning")
 
             # 返回参数字典
             return {
-                'Ret': Ret, 'ae': ae, 'ap': ap, 'nC': nC, 'fz': fz,
-                'k': k, 'rho': rho, 'cp': cp, 'source_power': source_power,
-                'rb0': rb0, 'N': N, 'wC': wC, 'betaC': betaC, 'fx': fx, 'fy':fy,
-                'X0Cutter': X0Cutter, 'Y0Cutter': Y0Cutter,
+                'ret': ret, 'ae': ae, 'ap': ap, 'nr': nr,
+                'k': k, 'rho': rho, 'cp': cp, 'laser_p': laser_p,
+                'laser_r': laser_r,
                 'coordinates': self.coordinates if self.coordinates else [(0.0, 0.0)]
             }
         except ValueError as e:
@@ -620,26 +704,54 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             raise Exception(f"获取参数时出错: {e}")
 
     def _get_con_array(self, params):
-        """构建轨迹生成函数所需的配置数组"""
+
+        """设置默认参数与计算得到的参数，构建轨迹生成函数所需的配置数组"""
+        # 一些默认参数：
+        fz = 0.5e-03  # 每齿进给量
+        tooth_number = 4  # 铣刀齿数
+
+        dt=0.00048  # 原始激光轨迹仿真时间步长
+
+        # 计算派生参数
+        # wC = nC * 2 * np.pi/60  # 主轴角速度 (rad/s)
+        scan_angle = 2 * np.arcsin(params['ae'] / 2 / params['ret'])  # 激光扫描角 (rad)
+        fr = fz * tooth_number  # 每转进给距离 (m/r)
+        fx = fr * params['nr'] / 60  # X方向进给率 (m/s)，认为为进给率
+        fy = 0
+
+        # 获取坐标起点
+        if self.coordinates:
+            X0Cutter = self.coordinates[0][0]
+            Y0Cutter = self.coordinates[0][1]
+        else:
+            X0Cutter = 0.0
+            Y0Cutter = 0.0
+            self.show_status_message("警告：坐标列表为空，使用默认起点 (0,0)", "warning")
+
         # 激光起点X坐标（相对于刀具偏移5.5mm），这个偏移量也是可以修改的
         bias = 5.5e-3
-        X0Laser = params['X0Cutter'] + bias
+        X0Laser = X0Cutter + bias # 可是一开始不是在Y方向上偏置吗，我觉得有问题
 
         # 配置数组（各元素含义见轨迹生成函数文档）
-        return [
-            2, params['ae'], params['ap'], params['k'],
-            params['k'] / (params['cp'] * params['rho']),  # 热扩散系数 alpha
-            params['Ret'], params['Ret'], params['rb0'], params['betaC'], 50,  # beta_b = 50
-            params['X0Cutter'], params['Y0Cutter'],  # 刀具起点坐标
-            X0Laser, params['Y0Cutter'],  # 激光起点坐标
-            4, params['fx'], params['fy'], params['wC'],  # insertNr, fx, fy, wC # 这里设定 fy=0
-            2, 5.5e-3,  # parallNr, bias
-            4000, 50, 40, 1, 12,  # intPointNr, nodesNrX/Y/Z, memAvailableGB(仿真参数）
-            100, 1, 0.5, params['coordinates']  # pointOfOnePass(一段刀具轨迹对应激光扫描的点数）, base_factor, sharpness_factor（这个是角度因子修正曲率）, coordinates
-        ]
+        return {
+            "ae": params['ae'], "ap": params['ap'],  # 铣削参数：铣削宽度，铣削深度，刀具有效半径
+            "ret": params['ret'], "fz":fz,"tooth_number":tooth_number,"nr":params["nr"],  # 刀具参数：刀具有效直径、每齿进给量、齿数、主轴转速
+            "alpha":params['k'] / (params['cp'] * params['rho']),  # 材料参数：热扩散系数 alpha
+            "laser_r": params['laser_r'], "scan_angle":scan_angle, "beta_b":50,  # 激光参数：激光半径，激光扫描角度，beta_b = 50
+            "X0Cutter":X0Cutter, "Y0Cutter":Y0Cutter,  # 刀具起点坐标
+            "X0Laser":X0Laser,
+            # "Y0Laser":params['Y0Laser'],
+            "bias":5.5e-3, # 激光起点X、Y坐标，激光起点相对于刀具起点偏置
+            "base_factor":1, "sharpness_factor":0.5, #base_factor, sharpness_factor（这个是角度因子修正曲率）
+            'coordinates':params['coordinates'], # 刀具所有经过的轨迹点coordinates
+            "fx":fx, "fy":fy,   # 刀具运动参数：x方向刀具进给速度，认为为进给率, fy# 这里设定 fy=0
+            "parallNr":2, "dt":dt,  # 仿真参数：parallNr,时间步长
+            "memAvailableGB(仿真参数）": 12, "nodesNrX": 50, "nodesNrY": 40, "nodesNrZ": 1,  # intPointNr, nodesNrX/Y/Z,
+            "intPointNr": 4000, "pointOfOnePass": 100,  # pointOfOnePass(一段刀具轨迹对应激光扫描的点数）, 这个一定要改
+        }
 
     # ========================== 坐标管理 ==========================
-    def open_coord_dialog(self):
+    def open_coord_dialog(self): #后续G代码里面的坐标就要输进去
         """打开坐标输入对话框，允许用户输入/编辑轨迹坐标点"""
         try:
             # 创建坐标对话框
@@ -682,93 +794,96 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 # 真正执行计算部分
     # ========================== 轨迹生成 ==========================
     def cutter_traj_gen(self):
-        """生成刀具轨迹并显示"""
         try:
-            # 1. 获取参数
-            common_params = self._get_common_parameters() # 坐标框输入参数
-            traj_params = self.get_current_trajectory_params()  # 主要是轨迹选框中输入的变量（不是坐标）
-            con_array = self._get_con_array(common_params)  # 其他计算得到变量
-
-            # 2. 检查坐标点数量（至少2个）,没有两个时会自动绘制一个矩形路径
-            if len(self.coordinates) < 2:
-                self.show_status_message("警告：需要至少两个点，使用默认矩形路径", "warning")
-                # 生成默认矩形路径
-                start_x = common_params['X0Cutter']
-                start_y = common_params['Y0Cutter']
-                self.coordinates = [
-                    (start_x, start_y),
-                    (start_x + 0.02, start_y),
-                    (start_x + 0.02, start_y + 0.01),
-                    (start_x, start_y + 0.01),
-                    (start_x, start_y)  # 闭合路径
-                ]
-
-            # 3. 显示坐标点信息
-            self.show_status_message(f"生成多段轨迹，共{len(self.coordinates)}个点", "info")
-            for i, (x, y) in enumerate(self.coordinates):
-                self.show_status_message(f"点{i + 1}: ({x:.6f}, {y:.6f})", "info")
-
-            # 4. 生成刀具轨迹数据
-            (x_rotated, y_rotated, tbs, theta_dynamic,
-             cutter_traj_type, params_traj, seg_info) = sweeping_laser_trajectory_with_distance_preservation(
-                common_params['ae'] + 2 * common_params['rb0'],
-                con_array, common_params['N'], traj_params, common_params['coordinates']
-            )
-
-            # 5. 获取刀具轨迹坐标
-            x_cutter, y_cutter, _ = cutter_trajectory(
-                tbs, con_array, cutter_traj_type, params_traj, common_params['coordinates']
-            )
-
-            # 6. 绘制并显示轨迹
-            fig = cutter_matplotlib_plot(x_cutter, y_cutter, common_params['Ret'], cutter_traj_type, self.x_scope, self.y_scope)
-            display_plot_on_label(fig, self.cutter_plot_display)
-
-            self.show_status_message("生成刀具轨迹完毕", "success")
-
-        except ValueError as e:
-            self.show_status_message(f"参数转换错误: {e}", "error")
-        except Exception as e:
-            self.show_status_message(f"计算错误: {e}", "error")
-
-    def laser_traj_gen(self):
-        """生成激光轨迹并显示"""
-        try:
-            # 1. 获取参数
             common_params = self._get_common_parameters()
             traj_params = self.get_current_trajectory_params()
             con_array = self._get_con_array(common_params)
 
-            # 2. 生成激光轨迹数据
-            (x_rotated, y_rotated, tbs, theta_dynamic,
-             cutter_traj_type, params_traj, seg_info) = sweeping_laser_trajectory_with_distance_preservation(
-                common_params['ae'] + 2 * common_params['rb0'],
-                con_array, common_params['N'], traj_params, common_params['coordinates']
-            )
+            self.show_status_message(f"生成多段轨迹，共{len(self.coordinates)}个点", "info")
+            x_cutter, y_cutter, cutter_info = cutter_trajectory(con_array, common_params['coordinates'])
 
-            # 3. 获取刀具轨迹（用于参考显示）
-            x_cutter, y_cutter, _ = cutter_trajectory(
-                tbs, con_array, cutter_traj_type, params_traj, common_params['coordinates']
-            )
-            # 将激光参数输入
-            self.x_laser=x_rotated
-            self.y_laser=y_rotated
+            # 存储数据
+            self.cutter_data = {
+                'x': x_cutter, 'y': y_cutter,
+                'ret': common_params['ret'],
+                'x_scope': self.x_scope, 'y_scope': self.y_scope
+            }
 
-            # 4. 绘制并显示动态激光轨迹
-            fig = laser_matplotlib_plot(
-                x_cutter, y_cutter, common_params['Ret'], common_params['rb0'],
-                x_rotated, y_rotated, cutter_traj_type,self.x_scope, self.y_scope
-            )
+            # 如果当前页面是刀具轨迹页则刷新，否则提示
+            if self.stackedWidget.currentIndex() == 0:
+                self._refresh_cutter_display()
+            else:
+                self.show_status_message("刀具轨迹已生成，切换至【刀具轨迹图】页面查看", "info")
 
-            self.laser_plot_widget.set_figure(fig)
-            # display_plot_on_label(fig, self.laser_plot_display)
-
-            self.show_status_message("生成激光轨迹完毕", "success")
-
-        except ValueError as e:
-            self.show_status_message(f"参数转换错误: {e}", "error")
+            self.show_status_message("生成刀具轨迹完毕", "success")
         except Exception as e:
             self.show_status_message(f"计算错误: {e}", "error")
+
+    def laser_traj_gen(self):
+        try:
+            common_params = self._get_common_parameters()
+            traj_params = self.get_current_trajectory_params()
+            con_array = self._get_con_array(common_params)
+
+            x_cutter, y_cutter, cutter_info = cutter_trajectory(con_array, common_params['coordinates'])
+            x_rotated, y_rotated, vLaser = sweeping_laser_trajectory_with_distance_preservation(
+                con_array, traj_params, x_cutter, y_cutter, cutter_info
+            )
+
+            self.x_laser = np.concatenate(x_rotated)
+            self.y_laser = np.concatenate(y_rotated)
+            self.vLaser=vLaser
+
+            # 存储数据
+            self.laser_data = {
+                'x_cutter': x_cutter, 'y_cutter': y_cutter,
+                'ret': common_params['ret'], 'rb0': common_params['laser_r'],
+                'x_laser': x_rotated, 'y_laser': y_rotated,
+                'x_scope': self.x_scope, 'y_scope': self.y_scope,
+                'is_opt': False
+            }
+
+            if self.stackedWidget.currentIndex() == 1:
+                self._refresh_laser_display()
+            else:
+                self.show_status_message("激光轨迹已生成，切换至【激光扫描轨迹】页面查看", "info")
+
+            self.show_status_message("生成激光轨迹完毕", "success")
+        except Exception as e:
+            self.show_status_message(f"计算错误: {e}", "error")
+
+    def laser_traj_optimize(self):
+        try:
+            common_params = self._get_common_parameters()
+            traj_params = self.get_current_trajectory_params()
+            con_array = self._get_con_array(common_params)
+
+            x_cutter, y_cutter, cutter_info = cutter_trajectory(con_array, common_params['coordinates'])
+            x_rotated, y_rotated, vLaser = sweeping_laser_trajectory_optimized(
+                con_array, traj_params, x_cutter, y_cutter, cutter_info
+            )
+            self.x_laser = np.concatenate(x_rotated)
+            self.y_laser = np.concatenate(y_rotated)
+            self.vLaser=vLaser
+
+            # 存储数据
+            self.laser_data = {
+                'x_cutter': x_cutter, 'y_cutter': y_cutter,
+                'ret': common_params['ret'], 'rb0': common_params['laser_r'],
+                'x_laser': x_rotated, 'y_laser': y_rotated,
+                'x_scope': self.x_scope, 'y_scope': self.y_scope,
+                'is_opt': True
+            }
+
+            if self.stackedWidget.currentIndex() == 1:
+                self._refresh_laser_display()
+            else:
+                self.show_status_message("激光轨迹已生成，切换至【激光扫描轨迹】页面查看", "info")
+
+            self.show_status_message("生成激光轨迹完毕", "success")
+        except Exception as e:
+            self.show_status_message(f"计算错误: {e}", "error")
+
 
     # ========================== 温度场计算 ==========================
     def _setup_heat_thread_connections(self):
@@ -793,12 +908,14 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             con_array = self._get_con_array(common_params)
 
             # 2. 创建并启动计算线程
-            self.heat_thread = HeatTrajThread(common_params, traj_params, con_array, is_even, x_laser=self.x_laser, y_laser=self.y_laser)
+            self.heat_thread = HeatTrajThread(con_array, common_params, traj_params, is_even, x_laser=self.x_laser, y_laser=self.y_laser, vLaser=self.vLaser)
             self._setup_heat_thread_connections()
             self.heat_thread.start()
 
             # 3. 禁用计算按钮避免重复点击
             self.btn_heat_even.setEnabled(False)
+            # 加代码防抖
+            QTimer.singleShot(500, lambda: self.btn_opt_laser.setEnabled(True))
 
         except Exception as e:
             self.show_status_message(f"启动热轨迹计算失败: {e}", "error")
@@ -809,8 +926,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 #         self._start_heat_calculation(is_even=False)
 
     def heat_traj_gen_even(self):
-        """启动等弧长算法的温度场计算（多线程）"""
-        self._start_heat_calculation(is_even=True)
+        """使用正常算法计算热场"""
+        self._start_heat_calculation(is_even=False)
 
 
     @pyqtSlot(float, str)
@@ -821,73 +938,30 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot(object)
     def _on_heat_calculation_finished(self, result):
-        """温度场计算完成后的处理"""
         try:
-            # 1. 绘制温度场静态图
-            if result['method'] == 'even':
-                fig = heat_even_matplotlib_plot(
-                    result['x'], result['y'], result['nz'], result['T'], result['traj_type']
-                )
+            # 存储热场数据
+            self.heat_data = {
+                'x': result['x'], 'y': result['y'], 'nz': result['nz'],
+                'T': result['T'], 'traj_type': result['traj_type'],
+                'animation_frames': result.get('animation_frames'),
+                'animation_frame_times': result.get('animation_frame_times')
+            }
 
-            display_plot_on_label(fig, self.heat_plot_display)
-
-            # 2. 处理动画数据
-            if result.get('animation_frames') and result.get('animation_frame_times'):
-                self.show_status_message("正在创建温度场动画...", "info")
-
-                # 清理旧动画
-                if self.heat_animation_controller:
-                    self.heat_animation_controller.close()
-                    self.heat_animation_controller = None
-
-                # 禁用动画按钮直到创建完成
-                self.disable_animation_buttons()
-
-                # 创建新动画控制器
-                self.heat_animation_controller = create_simple_heat_animation(
-                    self.heat_animation_container,
-                    result['x'], result['y'],
-                    result['animation_frames'],
-                    result['animation_frame_times'],
-                    result['traj_type']
-                )
-
-                if self.heat_animation_controller:
-                    # 重新绑定动画按钮
-                    self.connect_animation_buttons()
-                    # 启用动画按钮
-                    self.enable_animation_buttons()
-                    # 更新按钮状态（初始暂停）
-                    self.update_animation_button_states(is_playing=False)
-                    self.show_status_message("温度场动画已创建完成！", "success")
-                else:
-                    self.show_status_message("创建动画控制器失败", "warning")
-                    self.disable_animation_buttons()
-
+            if self.stackedWidget.currentIndex() == 2:
+                self._refresh_heat_display()
             else:
-                # 无动画数据时清空容器
-                if self.heat_animation_container.layout():
-                    while self.heat_animation_container.layout().count():
-                        item = self.heat_animation_container.layout().takeAt(0)
-                        if item.widget():
-                            item.widget().deleteLater()
-                self.disable_animation_buttons()
-                self.show_status_message("没有生成动画数据", "info")
+                self.show_status_message("热场图已生成，切换至【热场动画及图】页面查看", "info")
 
-            # 3. 显示完成消息
-            method_name = "等弧长采样" if result['method'] == 'even' else ""
-            self.show_status_message(f"生成{method_name}温度场二维切片图完毕", "success")
-
+            # method_name = "等弧长采样" if result['method'] == 'even' else ""
+            # self.show_status_message(f"生成{method_name}温度场二维切片图完毕", "success")
+            self.show_status_message(f"生成温度场二维切片图完毕", "success")
         except Exception as e:
             self.show_status_message(f"图形创建失败: {e}", "error")
             traceback.print_exc()
             self.disable_animation_buttons()
         finally:
-            # 重新启用计算按钮
             self.btn_heat_even.setEnabled(True)
-            # 清理线程引用
             self.heat_thread = None
-
     @pyqtSlot(str)
     def _on_heat_calculation_error(self, error_msg):
         """温度场计算出错的处理"""
