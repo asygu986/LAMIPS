@@ -15,6 +15,10 @@ from datetime import datetime
 import html
 
 # PyQt5 GUI相关模块
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QFileDialog, QVBoxLayout,
+    QWidget, QPushButton, QMessageBox
+)
 from PyQt5.QtCore import (
     QThread, pyqtSignal, pyqtSlot, QMetaObject, Qt
 )
@@ -25,6 +29,8 @@ from uniform_fun import traj_centered, laser_trajectory  # 轨迹相关工具函
 from traj_gen import *  # 轨迹生成核心函数
 from ui_main import Ui_MainWindow  # 主窗口UI
 from plot_disp import *  # 绘图显示相关函数
+# 找到你原有导入disp_plot的位置，新增：
+from plot_disp import InteractiveMatplotlibWidget
 
 # ============================== 全局配置 ==============================
 # 忽略弃用警告，避免控制台输出干扰
