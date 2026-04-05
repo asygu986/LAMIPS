@@ -1,0 +1,104 @@
+1、文件命名规范：
+对于UI文件代码，文件名前面有ui
+对于通用调用文件，命名为uniform_fun
+对于一般代码文件，在命名时要确保每个名字为四个字母，最好只用两段
+
+2、函数定义顺序：
+一般是前面定义后面要定义的函数，所以，前面定义的函数往往在最后一起调用，为了做区分，真正执行代码前有：# 真正执行计算部分
+
+3、参数理解
+一、先总结几个参数的意义：
+铣削参数：
+	1）激光源半径rb0和铣削宽度ae是用来求激光扫描半径：params['ae'] + 2 * params['rb0']。
+	    ae可以用来求激光扫描中心角，能够控制激光宽度
+	2）铣削深度ap此时没什么用
+	3）主轴转速nC和每齿进给量fz是用来求刀具x轴进给速度fx
+        wC = nC * 2 * np.pi # 这句话是多余的吧
+        betaC = 2 * np.arcsin(ae / 2 / 	Ret) （铣削宽度影响中心角）
+        fr = fz * 4  # insertNr = 4,fr为每转一圈进给的距离，那么我们这个转速为r/min，应该再除以一个六十才是进给速率
+        fx = fr * nC
+        （这里我们为了方便，认为刀具y方向进给速度fy=fx，则总速度fv=1.41fx，就不应该有这个）。
+
+材料参数：
+	1）k、rho、cp三个材料参数主要是用于求热扩散系数alpha，这个主要是根据激光轨迹计算热场分布用
+激光参数：
+	1）rb0本身还是在图中体现了激光源的半径。然后激光源半径rb0和激光源功率source_power联合起来，根据gaussian_heat_source可以用来求热流密度分布q，进而根据时间循环求出温度场分布T。
+离散化参数：
+	此外，在计算热场时一z组很重要的参数是
+nx, ny, nz = 300, 300, 25
+Lx, Ly, Lz = 0.02, 0.02, 0.005
+dx, dy, dz = Lx / (nx - 1), Ly / (ny - 1), Lz / (nz - 1)
+dt = 0.0002
+T = np.ones((nx, ny, nz)) * 300 初始化温度
+	1）尤其是Lx，Ly,设定了分析温度场的范围，即我们只分析这个矩形范围内各点的温度，所以注意要根据情况进行调整。
+
+其他的一些参数：
+激光偏移参数:bias，控制了激光初始位置相对于刀具中心点的便宜位置,其实影响不是很大
+N:这里的N乘上con[25]（pointOfOnePass）,代表一段刀具轨迹对应激光扫描点的个数，并不会影响刀具延申的距离，但是会影响一段激光轨迹的精确程度，
+N越大，激光轨迹越精确
+Rb = Ret # 这里直接认为刀具有效半径等于铣刀半径
+
+3、代码结构
+ main中直到680行才开始真正具体执行，前面都是前置函数
+
+PS:
+1、然后这个代码温度场绘制和动画没有问题，然后对于刀具和激光轨迹绘制的代码，我显示刀具和激光源大小是正确的，
+但我希望不是现在这种根据刀具轨迹大小来绘制刀具和激光图像，
+而是根据我设定的一个x_scope=[-Lx/2,Lx/2]（前面是X轴下限，后面是X轴上限，值不重要，反正就是输入一个有坐标上下限的数组，y轴一样），
+根据这个量来画相应大小的刀具轨迹和激光轨迹画布，请你修改这两个代码（注意只要修改激光和刀具轨迹代码，不要修改温度场代码，同时只给我修改部分的代码，不要冗余）
+2、对于刚才的主函数main.py，其生成热场图时是重新计算了一遍激光轨迹，你能不能修改成就是单独计算完激光轨迹后能把激光轨迹点传给热进程进行计算热场图，
+说明逻辑和要修改的部分，不要把整个代码都给我
+
+
+    # def _calculate_normal(self, T, x, y, z, alpha, dx, dy, dz, dt,
+    #                       x_traj, y_traj, nt, progress_interval,
+    #                       animation_interval, heat_source_func):
+    #     """
+    #     智能优化算法计算温度场（固定时间步长）
+    #     参数同等弧长算法，新增dt参数（固定时间步长）
+    #     """
+    #     current_time = 0.0
+    #     for t in range(1, nt):
+    #         # 获取当前热源中心位置
+    #         x_center, y_center, z_center = laser_trajectory(t, x_traj, y_traj, len(z))
+    #
+    #         # 计算热源分布
+    #         q = heat_source_func(
+    #             self.params['source_power'], self.params['rb0'],
+    #             x, y, z, x_center, y_center, z_center, self.params['rb0']
+    #         )
+    #
+    #         # 更新温度场（热传导方程）
+    #         T[1:-1, 1:-1, 1:-1] += (
+    #                 alpha * dt * (
+    #                 (T[2:, 1:-1, 1:-1] - 2 * T[1:-1, 1:-1, 1:-1] + T[:-2, 1:-1, 1:-1]) / dx ** 2 +
+    #                 (T[1:-1, 2:, 1:-1] - 2 * T[1:-1, 1:-1, 1:-1] + T[1:-1, :-2, 1:-1]) / dy ** 2 +
+    #                 (T[1:-1, 1:-1, 2:] - 2 * T[1:-1, 1:-1, 1:-1] + T[1:-1, 1:-1, :-2]) / dz ** 2
+    #         ) + dt * q[1:-1, 1:-1, 1:-1] / (self.params['rho'] * self.params['cp'])
+    #         )
+    #
+    #         # 更新时间
+    #         current_time += dt
+    #
+    #         # 采集动画帧
+    #         if self.save_animation and t % animation_interval == 0:
+    #             self.animation_frames.append(T[:, :, len(z) // 2].copy())
+    #             self.animation_frame_times.append(current_time)
+    #
+    #         # 更新进度
+    #         if t % progress_interval == 0:
+    #             progress = t / nt * 100
+    #             self.progress_update.emit(
+    #                 progress, f"正在计算温度场... 进度: {progress:.0f}% ({t}/{nt}步)"
+    #             )
+    #
+    #     # 保存最后一帧
+    #     if self.save_animation:
+    #         self.animation_frames.append(T[:, :, len(z) // 2].copy())
+    #         self.animation_frame_times.append(current_time)
+    #
+    #     self.status_update.emit("温度场计算完成！", "success")
+
+
+0.06/99=0.0006
+0.06/67=0.0009

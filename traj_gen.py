@@ -145,11 +145,13 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
     traj_type = traj_params['trajectory_type'].lower()
     params = traj_params['params']
     ae = con["ae"]
-    ret = con['ret']  # 有效铣刀半径
+    ret_real = con['ret']  # 有效铣刀半径
+
+    ret_v = 26e-3     # 用于改变激光轨迹曲率的铣刀半径
     laser_r = con['laser_r']  # 激光束半径
     fz = con["fz"]  # 每齿进给量
     tooth_number = con["tooth_number"]
-    nr = con["nr"]
+    nr = con["nr"]*1.185
     dt = con["dt"]  # 时间步长，即激光两点之间间隔时间
     base_factor = con["base_factor"]
     sharpness_factor = con["sharpness_factor"]
@@ -166,15 +168,15 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
 
     # 获得激光轨迹
     Lw = ae + 2 * laser_r  # 考虑到激光源半径后的扫描半径
-    gm = 2 * np.arcsin(Lw / 2 / ret)  # 激光扫描角度范围
-    L1 = 2 * ret * gm
+    gm = 2 * np.arcsin(Lw / 2 / ret_v)  # 激光扫描角度范围
+    L1 = 2 * ret_v * gm
     fr = fz * tooth_number  # 每转进给距离 (m/r)
     fv = fr * nr / 60  # X方向进给率 (m/s)
     vLaser1 = tooth_number * L1 * fv / laser_r / 2
     T1 = L1 / vLaser1  # 激光扫描过一个周期的时间
 
     point_of_one_pass = round(T1 / dt)  # 一个周期内扫描点数，是根据一个周期总长除以激光时间步长而
-    print(point_of_one_pass)
+    # print(point_of_one_pass)
 
     if total_length == 0:
         total_length = 0.01
@@ -190,7 +192,7 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
     ybs = []
 
     for i in range(len(seg_lengths)):
-        laser_length[i] = seg_lengths[i] + 0
+        laser_length[i] = seg_lengths[i] + ret_real
         Tc = laser_length[i] / fv # 刀具移动时间
         period_num.append(Tc / T1)
 
@@ -198,10 +200,10 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
         # ✅【完全还原你的时间延迟代码】防止轨迹重叠！！！
         if i == 0:
             tbs.append(np.linspace(0, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
-            print("优化前各段周期数", round(period_num[i]))
+            # print("优化前各段周期数", round(period_num[i]))
         else:
-            tbs.append(np.linspace(8 * T1, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
-            print("优化前各段周期数", round(period_num[i])-8)
+            tbs.append(np.linspace(11 * T1, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
+            # print("优化前各段周期数", round(period_num[i])-8)
 
 
 
@@ -217,9 +219,8 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
 
         # 你的原始激光局部轨迹（完全不变）
         phi_b = -gm * np.cos(2 * np.pi / T1 * tbs[i]) / 2
-        x_laser_local = x_cutter_v[i] + ret * np.cos(phi_b)
-        y_laser_local = y_cutter_v[i] + ret * np.sin(phi_b)
-
+        x_laser_local = x_cutter_v[i] + ret_v * np.cos(phi_b)-ret_v
+        y_laser_local = y_cutter_v[i] + ret_v * np.sin(phi_b)
         # 动态旋转激光轨迹
         x_rot, y_rot = rotate_coordinates(
             x_laser_local, y_laser_local,
@@ -303,7 +304,7 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
         x_final.append(x_cycle + (target_start_x - x_cycle[0]))
         y_final.append(y_scaled + (target_start_y - y_scaled[0]))
 
-    step = (x_cycle.max() - x_cycle.min()) * 0.58
+    step = (x_cycle.max() - x_cycle.min()) * 0.65
 
     # ===================== 4. 分段生成轨迹（🔥 已修改：增加方向旋转） =====================
     laser_length = np.zeros(len(seg_lengths))
@@ -318,10 +319,10 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
         assert isinstance(laser_length[i], (float, int, np.number)), "laser_length[i] is not a number"
         assert isinstance(step, (float, int, np.number)), "step is not a number"
         if i == 0:
-            period_num = round(laser_length[i] / step+1e-9)
+            period_num = round(laser_length[i] / step+1e-9)-1
         else:
-            period_num = round(seg_lengths[i] / step+ 1e-9)
-        print("优化后各段周期数", period_num)
+            period_num = round(seg_lengths[i] / step+ 1e-9)-1
+        # print("优化后各段周期数", period_num)
 
         # 获取当前段未旋转的轨迹（已平移至起点）
         x_local = x_final[i]   # 数组

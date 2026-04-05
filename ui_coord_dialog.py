@@ -17,6 +17,7 @@ class CoordInputDialog(QDialog):
         super().__init__(parent)
         # 加载UI文件
         loadUi(r'D:\PythonProjects\Pycharm\Graduate_design\UI\coord_dialog.ui', self)
+        self.setWindowTitle("坐标输入窗口")
 
         # 连接信号槽
         self.btn_add_row.clicked.connect(self.add_row)
@@ -149,5 +150,5 @@ class CoordInputDialog(QDialog):
             else:
                 print(f"  第{row + 1}行: 控件不存在")
 
-        print(f"总共获取到 {len(coordinates)} 个有效坐标点")
+        # print(f"总共获取到 {len(coordinates)} 个有效坐标点")
         return coordinates

@@ -114,7 +114,8 @@ def cutter_matplotlib_plot(x, y, ret, x_scope, y_scope):
     start_circle = Circle(
         (x[0], y[0]), ret,  # 圆心坐标 + 半径
         color='#D6009B', alpha=0.6,  # 颜色（紫红色）+ 透明度
-        label='刀具起点'  # 图例标签
+        label='刀具起点'
+        # 图例标签
     )
     ax.add_patch(start_circle)
 
@@ -122,7 +123,7 @@ def cutter_matplotlib_plot(x, y, ret, x_scope, y_scope):
     end_circle = Circle(
         (x[-1], y[-1]), ret,  # 圆心坐标 + 半径
         color='#00C1B3', alpha=0.6,  # 颜色（青绿色）+ 透明度
-        label='刀具终点'  # 图例标签
+        label='刀具终点'# 图例标签
     )
     ax.add_patch(end_circle)
 
@@ -134,9 +135,9 @@ def cutter_matplotlib_plot(x, y, ret, x_scope, y_scope):
     )
 
     # 步骤6：设置图形样式和标签
-    ax.set_xlabel('X/m')  # X轴标签
-    ax.set_ylabel('Y/m')  # Y轴标签
-    ax.set_title(f'刀具轨迹')  # 图形标题
+    ax.set_xlabel('X/m',fontsize=10)  # X轴标签
+    ax.set_ylabel('Y/m',fontsize=10)  # Y轴标签
+    ax.set_title(f'刀具轨迹',fontsize=10, fontweight='bold')  # 图形标题
     ax.set_aspect('equal')  # 等比例坐标轴（保证圆形显示为正圆）
     ax.grid(True)  # 显示网格线
 
@@ -315,9 +316,9 @@ def heat_even_matplotlib_plot(x, y, nz, T, cutter_traj_type):
                    aspect='auto')
 
     plt.colorbar(im, label='温度 (K)')
-    ax.set_title(f'{cutter_traj_type}轨迹相配合激光均匀温度场分布')
-    ax.set_xlabel('X (m)')
-    ax.set_ylabel('Y (m)')
+    ax.set_title(f'{cutter_traj_type}轨迹相配合激光均匀温度场分布',fontsize=10,fontweight='bold')
+    ax.set_xlabel('X/m',fontsize=10)
+    ax.set_ylabel('Y/m',fontsize=10)
     plt.tight_layout()
     return fig
 
@@ -373,9 +374,9 @@ class HeatAnimationController(QObject):
                                  cmap='hot', vmin=self.vmin, vmax=self.vmax,
                                  aspect='auto', interpolation='bilinear')
         self.fig.colorbar(self.im, ax=self.ax, label='温度 (K)')
-        self.ax.set_xlabel('X/m')
-        self.ax.set_ylabel('Y/m')
-        self.ax.set_title(f'温度场分布 (时间: {times[0]:.4f} s)')
+        self.ax.set_xlabel('X/m',fontsize=10)
+        self.ax.set_ylabel('Y/m',fontsize=10)
+        self.ax.set_title(f'温度场分布 (时间: {times[0]:.4f} s)',fontsize=10, fontweight='bold')
 
         self.canvas.draw()
 
@@ -388,7 +389,7 @@ class HeatAnimationController(QObject):
         if frame.ndim == 1:
             frame = frame.reshape(-1, 1)
         self.im.set_data(frame.T)
-        self.ax.set_title(f'温度场分布 (时间: {self.times[self.current_frame]:.4f} s)')
+        self.ax.set_title(f'温度场分布 (时间: {self.times[self.current_frame]:.4f} s)',fontsize=10,fontweight='bold')
         self.canvas.draw_idle()
         self.current_frame += 1
 
@@ -411,7 +412,7 @@ class HeatAnimationController(QObject):
         if frame.ndim == 1:
             frame = frame.reshape(-1, 1)
         self.im.set_data(frame.T)
-        self.ax.set_title(f'温度场分布 (时间: {self.times[0]:.4f} s)')
+        self.ax.set_title(f'温度场分布 (时间: {self.times[0]:.4f} s)',fontsize=10, fontweight='bold')
         self.canvas.draw_idle()
 
     def save(self, parent=None):
@@ -429,12 +430,12 @@ class HeatAnimationController(QObject):
             im = ax.imshow(self.frames[0].T, extent=self.extent, origin='lower',
                            cmap='hot', vmin=self.vmin, vmax=self.vmax, aspect='auto')
             fig.colorbar(im, label='温度 (K)')
-            ax.set_xlabel('X/m')
-            ax.set_ylabel('Y/m')
+            ax.set_xlabel('X/m',fontsize=10)
+            ax.set_ylabel('Y/m',fontsize=10)
 
             def update(i):
                 im.set_data(self.frames[i].T)
-                ax.set_title(f'温度场分布 (时间: {self.times[i]:.4f} s)')
+                ax.set_title(f'温度场分布 (时间: {self.times[i]:.4f} s)',fontsize=10, fontweight='bold')
                 return im,
 
             ani = FuncAnimation(fig, update, frames=len(self.frames), interval=200, blit=True)

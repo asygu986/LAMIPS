@@ -844,10 +844,13 @@ QPushButton::hover{
     </item>
     <item row="1" column="0" colspan="4">
      <widget class="QFrame" name="Status">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
       <property name="maximumSize">
        <size>
         <width>16777215</width>
-        <height>55</height>
+        <height>94</height>
        </size>
       </property>
       <property name="styleSheet">
@@ -865,9 +868,9 @@ background-color:rgb(161, 194, 255)
        <property name="geometry">
         <rect>
          <x>10</x>
-         <y>2</y>
-         <width>651</width>
-         <height>50</height>
+         <y>10</y>
+         <width>681</width>
+         <height>81</height>
         </rect>
        </property>
        <property name="styleSheet">
@@ -892,10 +895,10 @@ p, li { white-space: pre-wrap; }
       <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
-         <x>692</x>
-         <y>15</y>
+         <x>780</x>
+         <y>30</y>
          <width>295</width>
-         <height>30</height>
+         <height>41</height>
         </rect>
        </property>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
@@ -954,7 +957,7 @@ p, li { white-space: pre-wrap; }
         <rect>
          <x>139</x>
          <y>-1</y>
-         <width>1121</width>
+         <width>1131</width>
          <height>931</height>
         </rect>
        </property>
@@ -965,10 +968,10 @@ p, li { white-space: pre-wrap; }
         <widget class="QLabel" name="cutter_plot_display">
          <property name="geometry">
           <rect>
-           <x>100</x>
-           <y>80</y>
-           <width>931</width>
-           <height>701</height>
+           <x>210</x>
+           <y>130</y>
+           <width>721</width>
+           <height>621</height>
           </rect>
          </property>
          <property name="frameShape">
@@ -987,8 +990,8 @@ p, li { white-space: pre-wrap; }
         <widget class="QLabel" name="label_cutterTraj">
          <property name="geometry">
           <rect>
-           <x>100</x>
-           <y>40</y>
+           <x>210</x>
+           <y>20</y>
            <width>81</width>
            <height>16</height>
           </rect>
@@ -1011,8 +1014,8 @@ p, li { white-space: pre-wrap; }
           <rect>
            <x>20</x>
            <y>50</y>
-           <width>1101</width>
-           <height>881</height>
+           <width>1081</width>
+           <height>811</height>
           </rect>
          </property>
         </widget>
@@ -1074,7 +1077,7 @@ p, li { white-space: pre-wrap; }
          <property name="geometry">
           <rect>
            <x>10</x>
-           <y>180</y>
+           <y>20</y>
            <width>181</width>
            <height>16</height>
           </rect>
@@ -1094,7 +1097,7 @@ p, li { white-space: pre-wrap; }
          <property name="geometry">
           <rect>
            <x>450</x>
-           <y>80</y>
+           <y>20</y>
            <width>101</width>
            <height>16</height>
           </rect>
@@ -1114,7 +1117,7 @@ p, li { white-space: pre-wrap; }
          <property name="geometry">
           <rect>
            <x>550</x>
-           <y>850</y>
+           <y>830</y>
            <width>461</width>
            <height>30</height>
           </rect>
@@ -1161,61 +1164,70 @@ p, li { white-space: pre-wrap; }
          <x>10</x>
          <y>270</y>
          <width>131</width>
-         <height>331</height>
+         <height>341</height>
         </rect>
        </property>
        <layout class="QVBoxLayout" name="verticalLayout">
         <item>
          <widget class="QPushButton" name="btn_cutter_change">
           <property name="styleSheet">
-           <string notr="true">QPushButton{
-	background-color:rgb(0,174,236);
-	height:22px;
-
-}
+           <string notr="true">
 QPushButton::hover{
 	background-color:rgb(65,184,131);
 }</string>
           </property>
           <property name="text">
-           <string>刀具轨迹图</string>
+           <string>刀具轨迹页面</string>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="btn_laser_change">
           <property name="styleSheet">
-           <string notr="true">QPushButton{
-	background-color:rgb(246, 255, 144);
-	height:22px;
-
-}
+           <string notr="true">
 QPushButton::hover{
 	background-color:rgb(65,184,131);
 }</string>
           </property>
           <property name="text">
-           <string>激光扫描轨迹</string>
+           <string>激光扫描轨迹页面</string>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="btn_heat_change">
           <property name="styleSheet">
-           <string notr="true">QPushButton{
-	background-color:rgb(255, 0, 0);
-	height:22px;
-}
+           <string notr="true">
 QPushButton::hover{
 	background-color:rgb(65,184,131);
 }</string>
           </property>
           <property name="text">
-           <string>热场静态图及动画</string>
+           <string>热场动画页面</string>
           </property>
          </widget>
         </item>
        </layout>
+      </widget>
+      <widget class="QLabel" name="label_10">
+       <property name="geometry">
+        <rect>
+         <x>40</x>
+         <y>250</y>
+         <width>72</width>
+         <height>15</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <family>Agency FB</family>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>页面选择</string>
+       </property>
       </widget>
      </widget>
     </item>

@@ -13,6 +13,7 @@ import sys
 import warnings
 from datetime import datetime
 import html
+import time
 
 # PyQt5 GUI相关模块
 from PyQt5.QtWidgets import (
@@ -51,7 +52,8 @@ class HeatTrajThread(QThread):
     status_update = pyqtSignal(str, str)
     progress_update = pyqtSignal(float, str)
 
-    def __init__(self, con_array, common_params, traj_params, is_even=False, x_laser=None, y_laser=None, vLaser=0):
+    def __init__(self, con_array, common_params, traj_params, is_even=False, x_laser=None, y_laser=None,
+                 vLaser=0, nt_fit_cutter=0):
         super().__init__()
         self.con = con_array
         self.params = common_params
@@ -63,6 +65,7 @@ class HeatTrajThread(QThread):
         self.x_laser = x_laser
         self.y_laser = y_laser
         self.vLaser = vLaser
+        self.nt_fitting= nt_fit_cutter
 
     def run(self):
         try:
@@ -72,12 +75,12 @@ class HeatTrajThread(QThread):
             nx, ny, nz = 200, 200, 10
             Lx, Ly, Lz = 0.1, 0.1, 0.005
             dx, dy, dz = Lx / (nx - 1), Ly / (ny - 1), Lz / (nz - 1)
-            dt = self.con["dt"]
             T = np.ones((nx, ny, nz)) * 300
-
             x_traj_centered, y_traj_centered = self.x_laser, self.y_laser
-            nt = int(len(x_traj_centered))
-            print(f"轨迹点数: {nt}")
+            nt = len(x_traj_centered)
+            # print("相配合时间点数:",self.nt_fitting)
+            dt = self.con["dt"] * self.nt_fitting / nt
+            # print(f"轨迹点数: {nt}")
 
             # 网格坐标（用于局部热源添加）
             x = np.linspace(-0.02, Lx, nx)
@@ -91,8 +94,8 @@ class HeatTrajThread(QThread):
             P = self.params['laser_p']
             r = self.params['laser_r']
             rho_cp = self.params['rho'] * self.params['cp']
-
-            self.status_update.emit(f"开始计算温度场，总共 {nt} 个时间步，共计 {nt*dt:.2f} s", "info")
+            # print(f"开始计算温度场，总共 {nt} 个时间步，共计 {nt*dt:.2f} s")
+            self.status_update.emit(f"开始计算温度场，共计 {nt*dt:.2f} s", "info")
             progress_interval = max(1, nt // 20)
             animation_interval = max(1, nt // 50)
 
@@ -224,7 +227,8 @@ class HeatTrajThread(QThread):
             # 更新进度
             if idx % progress_step == 0:
                 progress = (idx + 1) / total_segments * 100
-                self.progress_update.emit(progress, f"计算温度场... {progress:.0f}% ({idx + 1}/{total_segments})")
+                # print(progress, f"计算温度场... {progress:.0f}% ({idx + 1}/{total_segments})")
+                self.progress_update.emit(progress, f"计算温度场... {progress:.0f}% ")
 
         # 保存最后一帧
         if self.save_animation and len(self.animation_frames) < 100:
@@ -308,7 +312,8 @@ class HeatTrajThread(QThread):
             # 更新进度
             if idx % progress_step == 0:
                 progress = (idx + 1) / total_steps * 100
-                self.progress_update.emit(progress, f"计算温度场... {progress:.0f}% ({idx + 1}/{total_steps})")
+                # print(progress, f"计算温度场... {progress:.0f}% ({idx + 1}/{total_steps})")
+                self.progress_update.emit(progress, f"计算温度场... {progress:.0f}%")
 
         # 保存最后一帧
         if self.save_animation and len(self.animation_frames) < 100:
@@ -364,6 +369,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.x_laser = []
         self.y_laser = []
         self.vLaser = 0
+        self.nt_fit_cutter=0 # 这是原始轨迹能够配合刀具轨迹运动的总点数
 
         # 存储各图最新数据（用于页面切换后刷新）
         self.cutter_data = None  # 刀具轨迹数据
@@ -531,39 +537,27 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.append_status_message("应用程序已启动", "info")
 
     def append_status_message(self, message, message_type="info"):
-        """
-        向状态区添加带颜色的消息
-        参数：
-        - message: 消息内容
-        - message_type: 消息类型（info/warning/error/success）
-        """
-        # 时间戳
         timestamp = datetime.now().strftime("%H:%M:%S")
-
-        # 消息样式配置
         style_config = {
-            "info": {"color": "#333333", "prefix": "[INFO]"},  # 深灰色
-            "warning": {"color": "#ff9900", "prefix": "[WARN]"},  # 橙色
-            "error": {"color": "#ff0000", "prefix": "[ERROR]"},  # 红色
-            "success": {"color": "#009900", "prefix": "[SUCCESS]"}  # 绿色
+            "info": {"color": "#333333", "prefix": "[INFO]"},
+            "warning": {"color": "#ff9900", "prefix": "[WARN]"},
+            "error": {"color": "#ff0000", "prefix": "[ERROR]"},
+            "success": {"color": "#009900", "prefix": "[SUCCESS]"}
         }
         config = style_config.get(message_type, style_config["info"])
-
-        # 转义HTML特殊字符，避免格式错误
         safe_message = html.escape(message)
 
-        # 生成富文本消息
-        html_msg = f'<span style="color:{config["color"]};">[{timestamp}] <b>{config["prefix"]}</b> {safe_message}</span><br>'
+        # 使用 div 控制行间距和字体，去除额外边距
+        html_msg = f'<div style="margin:0; padding:0; line-height:1.2; font-size:9pt;">'
+        html_msg += f'<span style="color:{config["color"]};">[{timestamp}] <b>{config["prefix"]}</b> {safe_message}</span>'
+        html_msg += f'</div>'
 
-        # 显示消息
         self.textEdit_status.append(html_msg)
 
-        # 自动滚动到底部
         if hasattr(self, 'checkBox_auto_scroll') and self.checkBox_auto_scroll.isChecked():
             scrollbar = self.textEdit_status.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
 
-        # 控制台同步输出
         print(f"[{timestamp}] {config['prefix']} {message}")
 
     def show_status_message(self, message, message_type="info"):
@@ -613,7 +607,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 "lineEdit_Det": "15e-3",  # 刀具直径 (m)
                 "lineEdit_ae": "12e-3",  # 切削宽度 (m)
                 "lineEdit_ap": "-0.26e-3",  # 切削深度 (m)
-                "lineEdit_nC": "474",  # 主轴转速 (r/min) # 这两个参数其实应该可以合并
+                "lineEdit_nC": "400",  # 主轴转速 (r/min) # 这两个参数其实应该可以合并
                 "lineEdit_fz": "0.5e-3",  # 每齿进给量 (m)
                 "lineEdit_k": "15",  # 热传导系数 (W/(m·K))
                 "lineEdit_rho": "7800",  # 材料密度 (kg/m³)
@@ -779,7 +773,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             # 显示对话框并处理结果
             if dialog.exec_():
                 new_coords = dialog.get_coordinates()
-                self.show_status_message(f"从对话框获取到 {len(new_coords)} 个坐标", "info")
+                # self.show_status_message(f"从对话框获取到 {len(new_coords)} 个坐标", "info")
 
                 if new_coords:
                     # 更新坐标存储,此时类变量coordinates已经有了值
@@ -788,8 +782,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                     self.last_coordinates = new_coords.copy()
 
                     # 显示坐标点信息
-                    for i, (x, y) in enumerate(new_coords):
-                        self.show_status_message(f"点{i + 1}: ({x:.6f}, {y:.6f})", "info")
+                    # for i, (x, y) in enumerate(new_coords):
+                    #     self.show_status_message(f"点{i + 1}: ({x:.6f}, {y:.6f})", "info")
                 else:
                     self.show_status_message("没有输入有效坐标", "info")
 
@@ -805,7 +799,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             traj_params = self.get_current_trajectory_params()
             con_array = self._get_con_array(common_params)
 
-            self.show_status_message(f"生成多段轨迹，共{len(self.coordinates)}个点", "info")
+            # self.show_status_message(f"生成多段轨迹，共{len(self.coordinates)}个点", "info")
             x_cutter, y_cutter, cutter_info = cutter_trajectory(con_array, common_params['coordinates'])
 
             # 存储数据
@@ -815,13 +809,13 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 'x_scope': self.x_scope, 'y_scope': self.y_scope
             }
 
+            self.show_status_message("生成刀具轨迹完毕", "success")
             # 如果当前页面是刀具轨迹页则刷新，否则提示
             if self.stackedWidget.currentIndex() == 0:
                 self._refresh_cutter_display()
             else:
-                self.show_status_message("刀具轨迹已生成，切换至【刀具轨迹图】页面查看", "info")
+                self.show_status_message("刀具轨迹已生成，切换至【刀具轨迹页面】查看", "info")
 
-            self.show_status_message("生成刀具轨迹完毕", "success")
         except Exception as e:
             self.show_status_message(f"计算错误: {e}", "error")
 
@@ -839,6 +833,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             self.x_laser = np.concatenate(x_rotated)
             self.y_laser = np.concatenate(y_rotated)
             self.vLaser=vLaser
+            self.nt_fit_cutter = len(self.x_laser)
 
             # 存储数据
             self.laser_data = {
@@ -849,12 +844,13 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 'is_opt': False
             }
 
+            self.show_status_message("生成激光轨迹完毕", "success")
             if self.stackedWidget.currentIndex() == 1:
                 self._refresh_laser_display()
             else:
-                self.show_status_message("激光轨迹已生成，切换至【激光扫描轨迹】页面查看", "info")
+                self.show_status_message("激光轨迹已生成，切换至【激光扫描轨迹页面】查看", "info")
 
-            self.show_status_message("生成激光轨迹完毕", "success")
+
         except Exception as e:
             self.show_status_message(f"计算错误: {e}", "error")
 
@@ -863,6 +859,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             common_params = self._get_common_parameters()
             traj_params = self.get_current_trajectory_params()
             con_array = self._get_con_array(common_params)
+
+            self.show_status_message("激光轨迹正在优化中，请稍后", "info")
 
             x_cutter, y_cutter, cutter_info = cutter_trajectory(con_array, common_params['coordinates'])
             x_rotated, y_rotated, vLaser = sweeping_laser_trajectory_optimized(
@@ -881,12 +879,16 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 'is_opt': True
             }
 
+            time_length=2*round(len(self.x_laser)/4600)
+            time.sleep(time_length)
+            self.show_status_message("优化激光轨迹完毕", "success")
+
+            # 下面代码意思是，当你已经在激光扫描轨迹页面，就不会再显示“"激光轨迹已优化，切换至【激光扫描轨迹页面】查看"”，如果不在，会显示这个
             if self.stackedWidget.currentIndex() == 1:
                 self._refresh_laser_display()
             else:
-                self.show_status_message("激光轨迹已生成，切换至【激光扫描轨迹】页面查看", "info")
+                self.show_status_message("激光轨迹已优化，切换至【激光扫描轨迹页面】查看", "info")
 
-            self.show_status_message("生成激光轨迹完毕", "success")
         except Exception as e:
             self.show_status_message(f"计算错误: {e}", "error")
 
@@ -914,7 +916,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             con_array = self._get_con_array(common_params)
 
             # 2. 创建并启动计算线程
-            self.heat_thread = HeatTrajThread(con_array, common_params, traj_params, is_even, x_laser=self.x_laser, y_laser=self.y_laser, vLaser=self.vLaser)
+            self.heat_thread = HeatTrajThread(con_array, common_params, traj_params, is_even, x_laser=self.x_laser, y_laser=self.y_laser,
+                                              vLaser=self.vLaser, nt_fit_cutter=self.nt_fit_cutter)
             self._setup_heat_thread_connections()
             self.heat_thread.start()
 
@@ -956,11 +959,11 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             if self.stackedWidget.currentIndex() == 2:
                 self._refresh_heat_display()
             else:
-                self.show_status_message("热场图已生成，切换至【热场动画及图】页面查看", "info")
+                self.show_status_message("热场图已生成，切换至【热场动画页面】查看", "info")
 
             # method_name = "等弧长采样" if result['method'] == 'even' else ""
             # self.show_status_message(f"生成{method_name}温度场二维切片图完毕", "success")
-            self.show_status_message(f"生成温度场二维切片图完毕", "success")
+            # self.show_status_message(f"生成温度场二维切片图完毕", "success")
         except Exception as e:
             self.show_status_message(f"图形创建失败: {e}", "error")
             traceback.print_exc()
