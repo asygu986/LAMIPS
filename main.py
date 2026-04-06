@@ -640,16 +640,16 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         try:
             # 默认参数字典（键：控件名，值：默认值）
             default_params = {
-                "lineEdit_Det": "15e-3",  # 刀具直径 (m)
+                "lineEdit_Det": "15",  # 刀具直径 (mm)
                 # "lineEdit_ae": "12e-3",  # 铣削宽度 (m)
                 # "lineEdit_ap": "-0.26e-3",  # 切削深度 (m)
-                "lineEdit_nC": "400",  # 主轴转速 (r/min) # 这两个参数其实应该可以合并
-                # "lineEdit_fz": "0.5e-3",  # 每齿进给量 (m)
+                "lineEdit_nC": "1200",  # 主轴转速 (r/min)  # 这个参数是根据加工材料、刀具材料、加工条件等确定，一般不影响刀具运动
+                "lineEdit_fv": "800",  #  进给速率 (mm/nin)
                 "lineEdit_k": "15",  # 热传导系数 (W/(m·K))
                 "lineEdit_rho": "7800",  # 材料密度 (kg/m³)
                 "lineEdit_cp": "500",  # 比热容 (J/(kg·K))
                 "lineEdit_source_power": "2000",  # 激光功率 (W)
-                "lineEdit_rb0": "1.5e-3",  # 激光光斑半径 (m)
+                "lineEdit_rb0": "1.5",  # 激光光斑半径 (mm)
             }
 
             # 设置默认值
@@ -663,10 +663,10 @@ class MyWindow(QMainWindow, Ui_MainWindow):
     def clear_all_params(self):
         param_widgets = [
             "lineEdit_Det",
-            "lineEdit_ae",
-            "lineEdit_ap",
+            # "lineEdit_ae",
+            # "lineEdit_ap",
             "lineEdit_nC",
-            "lineEdit_fz",
+            "lineEdit_fv",
             "lineEdit_k",
             "lineEdit_rho",
             "lineEdit_cp",
@@ -735,21 +735,21 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         """提取所有输入参数（材料、激光、切削参数），也是在计算轨迹和温度场时调用"""
         try:
             # 从UI控件读取参数
-            ret = float(self.lineEdit_Det.text()) / 2  # 刀具有效半径 (m)
+            ret = float(self.lineEdit_Det.text()) / 2000  # 刀具有效半径 (mm)
             # ae = float(self.lineEdit_ae.text())  # 切削宽度 (m)
             # ap = float(self.lineEdit_ap.text())  # 切削深度 (m)
             nr = eval(self.lineEdit_nC.text())  # 主轴转速 (r/min)
-            # fz = float(self.lineEdit_fz.text())  # 每齿进给量 (m)
+            fv = float(self.lineEdit_fv.text())/1000  # 进给速率 (mm/min)
             k = float(self.lineEdit_k.text())  # 热传导系数 (W/(m·K))
             rho = float(self.lineEdit_rho.text())  # 材料密度 (kg/m³)
             cp = float(self.lineEdit_cp.text())  # 比热容 (J/(kg·K))
             laser_p = float(self.lineEdit_source_power.text())  # 激光功率 (W)
-            laser_r = eval(self.lineEdit_rb0.text())  # 激光光斑半径 (m)
+            laser_r = eval(self.lineEdit_rb0.text())/1000  # 激光光斑半径 (mm)
 
             # 不需要专门输入的参数
             # 返回参数字典
             return {
-                'ret': ret, 'nr': nr,
+                'ret': ret, 'nr': nr, "fv":fv,
                 'k': k, 'rho': rho, 'cp': cp, 'laser_p': laser_p,
                 'laser_r': laser_r,
                 'coordinates': self.coordinates if self.coordinates else [(0.0, 0.0)]
@@ -764,7 +764,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         """设置默认参数与计算得到的参数，构建轨迹生成函数所需的配置数组"""
         # 一些默认参数：
         ## 铣刀参数
-        fz = 0.5e-03  # 每齿进给量 m/tooth
+        # fz = 0.5e-03  # 每齿进给量 m/tooth
         tooth_number = 4  # 铣刀齿数
         ## 铣削参数
         ae = 12e-3 * params['ret'] / 7.5e-3  # /mm 铣削宽度
@@ -773,11 +773,12 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         dt=0.00048  # 原始激光轨迹仿真时间步长
 
         ## 计算派生参数
-        # wC = nC * 2 * np.pi/60  # 主轴角速度 (rad/s)
+        # wC = nr * 2 * np.pi/60  # 主轴角速度 (rad/s)
         scan_angle = 2 * np.arcsin(ae / 2 / params['ret'])  # 激光扫描角 (rad)
-        fr = fz * tooth_number  # 每转进给距离 (m/r)
-        fx = fr * params['nr'] / 60  # X方向进给率 (m/s)，认为为进给率
-        fy = 0
+        fv = params["fv"]  # 铣刀进给速率 (mm/min)
+        # fr = fz * tooth_number  # 每转进给距离 (m/r)
+        # fx = fr * params['nr'] / 60  # X方向进给率 (m/s)，认为为进给率
+        # fy = 0
 
         # 获取坐标起点
         if self.coordinates:
@@ -795,7 +796,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         # 配置数组（各元素含义见轨迹生成函数文档）
         return {
             "ae": ae, "ap": ap,  # 铣削参数：铣削宽度，铣削深度，刀具有效半径
-            "ret": params['ret'], "fz":fz,"tooth_number":tooth_number,"nr":params["nr"],  # 刀具参数：刀具有效直径、每齿进给量、齿数、主轴转速
+            "ret": params['ret'], "tooth_number":tooth_number,"nr":params["nr"],  # 刀具参数：刀具有效直径、齿数、主轴转速
             "alpha":params['k'] / (params['cp'] * params['rho']),  # 材料参数：热扩散系数 alpha
             "laser_r": params['laser_r'], "scan_angle":scan_angle, "beta_b":50,  # 激光参数：激光半径，激光扫描角度，beta_b = 50
             "X0Cutter":X0Cutter, "Y0Cutter":Y0Cutter,  # 刀具起点坐标
@@ -804,7 +805,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             "bias":5.5e-3, # 激光起点X、Y坐标，激光起点相对于刀具起点偏置
             "base_factor":1, "sharpness_factor":0.5, #base_factor, sharpness_factor（这个是角度因子修正曲率）
             'coordinates':params['coordinates'], # 刀具所有经过的轨迹点coordinates
-            "fx":fx, "fy":fy,   # 刀具运动参数：x方向刀具进给速度，认为为进给率, fy# 这里设定 fy=0
+            "fv":fv,   # 刀具运动参数：铣刀进给速率
             "parallNr":2, "dt":dt,  # 仿真参数：parallNr,时间步长
             "memAvailableGB(仿真参数）": 12, "nodesNrX": 50, "nodesNrY": 40, "nodesNrZ": 1,  # intPointNr, nodesNrX/Y/Z,
             "intPointNr": 4000, "pointOfOnePass": 100,  # pointOfOnePass(一段刀具轨迹对应激光扫描的点数）, 这个一定要改
@@ -939,7 +940,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 'is_opt': True
             }
 
-            time_length=2*round(len(self.x_laser)/4600)
+            time_length=1*round(len(self.x_laser)/4600)
             time.sleep(time_length)
             self.show_status_message("优化激光轨迹完毕", "success")
 

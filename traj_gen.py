@@ -29,10 +29,10 @@ def cutter_trajectory(con, coordinates):
     X0Cutter = con['X0Cutter']  # 刀具初始X位置
     Y0Cutter = con['Y0Cutter']  # 刀具初始Y位置
 
-    fx = con['fx']  # X轴进给速度
-    fy = con['fy']  # 假设fy=0
+    # fx = con['fx']  # X轴进给速度
+    # fy = con['fy']  # 假设fy=0
     # fv = math.sqrt(fx ** 2) # 不考虑y轴进给速度
-    fv = math.sqrt(fx ** 2 + fy ** 2)
+    fv = con["fv"]
 
     if fv == 0:
         print("警告：进给速度为0，无法生成轨迹")
@@ -149,9 +149,10 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
 
     ret_v = 26e-3     # 用于改变激光轨迹曲率的铣刀半径
     laser_r = con['laser_r']  # 激光束半径
-    fz = con["fz"]  # 每齿进给量
+    # fz = con["fz"]  # 每齿进给量
     tooth_number = con["tooth_number"]
-    nr = con["nr"]*1.185
+    fv = con["fv"]*1.185
+
     dt = con["dt"]  # 时间步长，即激光两点之间间隔时间
     base_factor = con["base_factor"]
     sharpness_factor = con["sharpness_factor"]
@@ -170,8 +171,8 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
     Lw = ae + 2 * laser_r  # 考虑到激光源半径后的扫描半径
     gm = 2 * np.arcsin(Lw / 2 / ret_v)  # 激光扫描角度范围
     L1 = 2 * ret_v * gm
-    fr = fz * tooth_number  # 每转进给距离 (m/r)
-    fv = fr * nr / 60  # X方向进给率 (m/s)
+    # fr = fz * tooth_number  # 每转进给距离 (m/r)
+    fv = fv / 60   # 进给速率 (m/s)
     vLaser1 = tooth_number * L1 * fv / laser_r / 2
     T1 = L1 / vLaser1  # 激光扫描过一个周期的时间
 
@@ -201,6 +202,8 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
         if i == 0:
             tbs.append(np.linspace(0, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
             # print("优化前各段周期数", round(period_num[i]))
+        elif (x_cutter[i+1],y_cutter[i+1]) == (x_cutter[0], y_cutter[0]):  # 用于当加工一个闭合面时激光免于重合
+            tbs.append(np.linspace(11 * T1, (round(period_num[i]) -20)* T1, round(period_num[i]) * (point_of_one_pass + 1)))
         else:
             tbs.append(np.linspace(11 * T1, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
             # print("优化前各段周期数", round(period_num[i])-8)
@@ -253,9 +256,10 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
     ae = con["ae"]
     ret = con['ret']  # 有效铣刀半径
     laser_r = con['laser_r']  # 激光束半径
-    fz = con["fz"]  # 每齿进给量
+    # fz = con["fz"]  # 每齿进给量
     tooth_number = con["tooth_number"]
-    nr = con["nr"]
+    # nr = con["nr"]
+    fv = con["fv"]  # 进给速率（mm/min)
     # dt = con["dt"]  # 时间步长，即激光两点之间间隔时间
     base_factor = con["base_factor"]
     sharpness_factor = con["sharpness_factor"]
@@ -274,8 +278,8 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
     Lw = ae + 2 * laser_r  # 考虑到激光源半径后的扫描半径
     gm = 2 * np.arcsin(Lw / 2 / ret)
     L1 = 2 * ret * gm
-    fr = fz * tooth_number
-    fv = fr * nr / 60
+    # fr = fz * tooth_number
+    fv = fv / 60
     vLaser1 = tooth_number * L1 * fv / laser_r / 2
     # T1 = L1 / vLaser1  # 激光单周期时间
 
@@ -320,6 +324,8 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
         assert isinstance(step, (float, int, np.number)), "step is not a number"
         if i == 0:
             period_num = round(laser_length[i] / step+1e-9)-1
+        elif (x_cutter[i+1],y_cutter[i+1]) == (x_cutter[0], y_cutter[0]):  # 用于当加工一个闭合面时激光免于重合
+            period_num = round((seg_lengths[i]-2*ret) / step+ 1e-9)-1
         else:
             period_num = round(seg_lengths[i] / step+ 1e-9)-1
         # print("优化后各段周期数", period_num)
