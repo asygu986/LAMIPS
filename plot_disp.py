@@ -137,7 +137,7 @@ def cutter_matplotlib_plot(x, y, ret, x_scope, y_scope):
     # 步骤6：设置图形样式和标签
     ax.set_xlabel('X/m',fontsize=10)  # X轴标签
     ax.set_ylabel('Y/m',fontsize=10)  # Y轴标签
-    ax.set_title(f'刀具轨迹',fontsize=10, fontweight='bold')  # 图形标题
+    ax.set_title(f'铣刀轨迹',fontsize=10, fontweight='bold')  # 图形标题
     ax.set_aspect('equal')  # 等比例坐标轴（保证圆形显示为正圆）
     ax.grid(True)  # 显示网格线
 
@@ -275,7 +275,7 @@ def laser_matplotlib_plot(x_cutter, y_cutter, Ret, rb0, x_laser=None, y_laser=No
     plt.axis('equal')
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.ticklabel_format(style='sci', axis='both', scilimits=(0, 0))
-    ax.set_title('优化刀具与激光轨迹' if is_opt else '原始刀具与激光轨迹', fontsize=10, fontweight='bold')
+    ax.set_title('优化激光扫描轨迹' if is_opt else '原始激光扫描轨迹', fontsize=10, fontweight='bold')
 
     # 构建图例（去重）
     handles = [line_cutter, cutter_start_circle, cutter_end_circle]
@@ -302,25 +302,25 @@ def laser_matplotlib_plot(x_cutter, y_cutter, Ret, rb0, x_laser=None, y_laser=No
     return fig
 
 
-def heat_even_matplotlib_plot(x, y, nz, T, cutter_traj_type):
-    fig, ax = plt.subplots(figsize=(8, 6))
-    T_middle = T[:, :, nz // 2].T  # 形状 (ny, nx)
-
-    # 使用 imshow 替代 contourf，并设置平滑插值
-    extent = [x.min(), x.max(), y.min(), y.max()]
-    im = ax.imshow(T_middle,
-                   extent=extent,
-                   origin='lower',
-                   cmap='hot',
-                   interpolation='bilinear',  # 关键：双线性插值
-                   aspect='auto')
-
-    plt.colorbar(im, label='温度 (K)')
-    ax.set_title(f'{cutter_traj_type}轨迹相配合激光均匀温度场分布',fontsize=10,fontweight='bold')
-    ax.set_xlabel('X/m',fontsize=10)
-    ax.set_ylabel('Y/m',fontsize=10)
-    plt.tight_layout()
-    return fig
+# def heat_even_matplotlib_plot(x, y, nz, T, cutter_traj_type): # 绘制静态热场图，此处用不到
+#     fig, ax = plt.subplots(figsize=(8, 6))
+#     T_middle = T[:, :, nz // 2].T  # 形状 (ny, nx)
+#
+#     # 使用 imshow 替代 contourf，并设置平滑插值
+#     extent = [x.min(), x.max(), y.min(), y.max()]
+#     im = ax.imshow(T_middle,
+#                    extent=extent,
+#                    origin='lower',
+#                    cmap='hot',
+#                    interpolation='bilinear',  # 关键：双线性插值
+#                    aspect='auto')
+#
+#     plt.colorbar(im, label='温度 (K)')
+#     ax.set_title(f'{cutter_traj_type}轨迹相配合激光均匀温度场分布',fontsize=10,fontweight='bold')
+#     ax.set_xlabel('X/m',fontsize=10)
+#     ax.set_ylabel('Y/m',fontsize=10)
+#     plt.tight_layout()
+#     return fig
 
 
 # ============================== 动态动画类（温度场）=============================
@@ -506,43 +506,3 @@ class InteractiveMatplotlibWidget(QWidget):
         self.canvas.draw()
         self.update()
 
-# def heat_matplotlib_plot(x, y, nz, T, cutter_traj_type):
-#     """
-#     绘制普通算法温度场二维切片图（z方向中间层）
-#     参数：
-#         x: X轴坐标数组 (m)
-#         y: Y轴坐标数组 (m)
-#         nz: Z方向网格数量
-#         T: 温度场三维数组 (nx × ny × nz)，单位K
-#         cutter_traj_type: 轨迹类型字符串（如"line"/"sin"/"zigzag"）
-#     返回：
-#         fig: Matplotlib的Figure对象（包含温度场分布图）
-#     绘制逻辑：
-#         1. 创建画布和坐标轴
-#         2. 提取z方向中间层温度数据
-#         3. 绘制等高线填充图（hot色图，体现温度分布）
-#         4. 添加颜色条（标注温度单位）
-#         5. 设置标题和坐标轴标签
-#         6. 调整布局并返回Figure对象
-#     """
-#     # 步骤1：创建绘图画布（8x6英寸）
-#     fig, ax = plt.subplots(figsize=(8, 6))
-#
-#     # 步骤2：提取z方向中间层温度数据
-#     middle_slice = nz // 2  # 中间层索引
-#     T_middle = T[:, :, middle_slice]  # 中间层温度数据
-#
-#     # 步骤3：绘制温度场等高线填充图（hot色图，红色=高温，黑色=低温）
-#     im = ax.contourf(x, y, T_middle, cmap='hot')
-#
-#     # 步骤4：添加颜色条（标注温度单位为K）
-#     plt.colorbar(im, label='温度 (K)')
-#
-#     # 步骤5：设置图形样式和标签
-#     ax.set_title(f'{cutter_traj_type}轨迹相配合激光温度场分布')
-#     ax.set_xlabel('X (m)')
-#     ax.set_ylabel('Y (m)')
-#
-#     # 步骤6：调整布局并返回Figure对象
-#     plt.tight_layout()
-#     return fig

@@ -17,7 +17,7 @@ class CoordInputDialog(QDialog):
         super().__init__(parent)
         # 加载UI文件
         loadUi(r'D:\PythonProjects\Pycharm\Graduate_design\UI\coord_dialog.ui', self)
-        self.setWindowTitle("坐标输入窗口")
+        self.setWindowTitle("铣刀路径点输入窗口")
 
         # 连接信号槽
         self.btn_add_row.clicked.connect(self.add_row)

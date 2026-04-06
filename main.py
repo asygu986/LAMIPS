@@ -71,26 +71,60 @@ class HeatTrajThread(QThread):
         try:
             self.status_update.emit("开始计算温度场", "info")
 
-            # 网格参数（已降低分辨率以加速）
+            # # 网格参数（已降低分辨率以加速），这是固定范围的参数
+            # nx, ny, nz = 200, 200, 10
+            # Lx, Ly, Lz = 0.1, 0.1, 0.005
+            # # 网格坐标（用于局部热源添加）
+            # x = np.linspace(-0.02, Lx, nx)
+            # y = np.linspace(-0.02, Ly, ny)
+            # z = np.linspace(-Lz / 2, Lz / 2, nz)
+            #
+            # dx, dy, dz = Lx / (nx - 1), Ly / (ny - 1), Lz / (nz - 1)
+
+            # 网格参数（分辨率固定，范围动态）
             nx, ny, nz = 200, 200, 10
-            Lx, Ly, Lz = 0.1, 0.1, 0.005
-            dx, dy, dz = Lx / (nx - 1), Ly / (ny - 1), Lz / (nz - 1)
+            Lz = 0.005  # 厚度方向固定
+
+            # 根据激光轨迹计算动态 X/Y 范围
+            x_traj_centered = self.x_laser
+            y_traj_centered = self.y_laser
+            if len(x_traj_centered) > 0:
+                x_min, x_max = np.min(x_traj_centered), np.max(x_traj_centered)
+                y_min, y_max = np.min(y_traj_centered), np.max(y_traj_centered)
+            else:
+                # 无轨迹时的默认范围
+                x_min, x_max = -0.02, 0.1
+                y_min, y_max = -0.02, 0.1
+
+            # 添加边距（基于刀具半径）
+            ret = self.params['ret']  # 刀具半径
+            margin = max(ret * 1.5, 0.005)  # 至少 5mm
+            x_min -= margin
+            x_max += margin
+            y_min -= margin
+            y_max += margin
+
+            Lx = x_max - x_min
+            Ly = y_max - y_min
+
+            dx = Lx / (nx - 1)
+            dy = Ly / (ny - 1)
+            dz = Lz / (nz - 1)
+
+            # 生成网格坐标
+            x = np.linspace(x_min, x_max, nx)
+            y = np.linspace(y_min, y_max, ny)
+            z = np.linspace(-Lz / 2, Lz / 2, nz)
             T = np.ones((nx, ny, nz)) * 300
             x_traj_centered, y_traj_centered = self.x_laser, self.y_laser
             nt = len(x_traj_centered)
             # print("相配合时间点数:",self.nt_fitting)
             dt = self.con["dt"] * self.nt_fitting / nt
+
             # print(f"轨迹点数: {nt}")
-
-            # 网格坐标（用于局部热源添加）
-            x = np.linspace(-0.02, Lx, nx)
-            y = np.linspace(-0.02, Ly, ny)
-            z = np.linspace(-Lz / 2, Lz / 2, nz)
-
+            # 预计算激光参数
             alpha = self.params['k'] / (self.params['cp'] * self.params['rho'])
             vLaser = self.vLaser
-
-            # 预计算激光参数
             P = self.params['laser_p']
             r = self.params['laser_r']
             rho_cp = self.params['rho'] * self.params['cp']
@@ -342,7 +376,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
         # 1. 初始化UI界面
         self.setupUi(self)
-        self.setWindowTitle("激光辅助加工路径智能规划软件")
+        self.setWindowTitle("激光辅助铣削路径智能规划系统")
 
         # 2. 初始化数据存储
         self.coordinates = []  # 当前坐标点列表
@@ -358,7 +392,6 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self._bind_ui_events()
 
         # 5. 初始化默认配置
-        self.set_default_values()  # 设置默认参数
         self.init_status_frame()  # 初始化状态显示区
         self.disable_animation_buttons()  # 初始禁用动画按钮
         # 定义刀具和激光轨迹x，y画布范围
@@ -382,6 +415,9 @@ class MyWindow(QMainWindow, Ui_MainWindow):
     # ========================== UI事件绑定 ==========================
     def _bind_ui_events(self):
         """绑定所有UI控件和相应事件处理函数"""
+        # 设置与清空默认参数按钮
+        self.btn_set_default.clicked.connect(self.set_default_values)  # 设置默认参数
+        self.btn_clear_params.clicked.connect(self.clear_all_params)
         # 轨迹生成按钮
         self.btn_cutter.clicked.connect(self.cutter_traj_gen)
         self.btn_laser.clicked.connect(self.laser_traj_gen)
@@ -429,7 +465,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
     def _refresh_cutter_display(self):
         if self.cutter_data is None:
-            self.show_status_message("尚未生成刀具轨迹", "warning")
+            self.show_status_message("尚未生成铣刀轨迹", "warning")
             return
         fig = cutter_matplotlib_plot(
             self.cutter_data['x'], self.cutter_data['y'],
@@ -455,20 +491,20 @@ class MyWindow(QMainWindow, Ui_MainWindow):
     def _refresh_heat_display(self):
         """刷新热场页面显示（静态图 + 动画） - 安全替换版"""
         if self.heat_data is None:
-            self.show_status_message("尚未生成热场图", "warning")
+            self.show_status_message("尚未生成热场动画", "warning")
             return
 
         # 1. 显示静态温度场图（与原逻辑相同）
-        try:
-            fig = heat_even_matplotlib_plot(
-                self.heat_data['x'], self.heat_data['y'],
-                self.heat_data['nz'], self.heat_data['T'],
-                self.heat_data['traj_type']
-            )
-            display_plot_on_label(fig, self.heat_plot_display)
-        except Exception as e:
-            self.show_status_message(f"静态温度场图绘制失败: {e}", "error")
-            traceback.print_exc()
+        # try:
+        #     fig = heat_even_matplotlib_plot(
+        #         self.heat_data['x'], self.heat_data['y'],
+        #         self.heat_data['nz'], self.heat_data['T'],
+        #         self.heat_data['traj_type']
+        #     )
+        #     display_plot_on_label(fig, self.heat_plot_display)
+        # except Exception as e:
+        #     self.show_status_message(f"静态温度场图绘制失败: {e}", "error")
+        #     traceback.print_exc()
 
         # 2. 处理动画部分：安全替换
         container = self.heat_animation_container
@@ -605,10 +641,10 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             # 默认参数字典（键：控件名，值：默认值）
             default_params = {
                 "lineEdit_Det": "15e-3",  # 刀具直径 (m)
-                "lineEdit_ae": "12e-3",  # 切削宽度 (m)
-                "lineEdit_ap": "-0.26e-3",  # 切削深度 (m)
+                # "lineEdit_ae": "12e-3",  # 铣削宽度 (m)
+                # "lineEdit_ap": "-0.26e-3",  # 切削深度 (m)
                 "lineEdit_nC": "400",  # 主轴转速 (r/min) # 这两个参数其实应该可以合并
-                "lineEdit_fz": "0.5e-3",  # 每齿进给量 (m)
+                # "lineEdit_fz": "0.5e-3",  # 每齿进给量 (m)
                 "lineEdit_k": "15",  # 热传导系数 (W/(m·K))
                 "lineEdit_rho": "7800",  # 材料密度 (kg/m³)
                 "lineEdit_cp": "500",  # 比热容 (J/(kg·K))
@@ -623,6 +659,26 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             self.show_status_message("已为所有输入框设置默认值", "success")
         except Exception as e:
             self.show_status_message(f"设置默认值时出错: {e}", "error")
+
+    def clear_all_params(self):
+        param_widgets = [
+            "lineEdit_Det",
+            "lineEdit_ae",
+            "lineEdit_ap",
+            "lineEdit_nC",
+            "lineEdit_fz",
+            "lineEdit_k",
+            "lineEdit_rho",
+            "lineEdit_cp",
+            "lineEdit_source_power",
+            "lineEdit_rb0"
+        ]
+        for widget_name in param_widgets:
+            widget = getattr(self, widget_name, None)
+            if widget and hasattr(widget, 'clear'):
+                widget.clear()
+        self.show_status_message("已清除路径点外所有输入参数", "success")
+
 
     def get_trajectory_parameters(self):
         """根据选择的轨迹类型切换参数配置页面并设置默认值"""
@@ -680,8 +736,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         try:
             # 从UI控件读取参数
             ret = float(self.lineEdit_Det.text()) / 2  # 刀具有效半径 (m)
-            ae = float(self.lineEdit_ae.text())  # 切削宽度 (m)
-            ap = float(self.lineEdit_ap.text())  # 切削深度 (m)
+            # ae = float(self.lineEdit_ae.text())  # 切削宽度 (m)
+            # ap = float(self.lineEdit_ap.text())  # 切削深度 (m)
             nr = eval(self.lineEdit_nC.text())  # 主轴转速 (r/min)
             # fz = float(self.lineEdit_fz.text())  # 每齿进给量 (m)
             k = float(self.lineEdit_k.text())  # 热传导系数 (W/(m·K))
@@ -690,10 +746,10 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             laser_p = float(self.lineEdit_source_power.text())  # 激光功率 (W)
             laser_r = eval(self.lineEdit_rb0.text())  # 激光光斑半径 (m)
 
-
+            # 不需要专门输入的参数
             # 返回参数字典
             return {
-                'ret': ret, 'ae': ae, 'ap': ap, 'nr': nr,
+                'ret': ret, 'nr': nr,
                 'k': k, 'rho': rho, 'cp': cp, 'laser_p': laser_p,
                 'laser_r': laser_r,
                 'coordinates': self.coordinates if self.coordinates else [(0.0, 0.0)]
@@ -707,14 +763,18 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
         """设置默认参数与计算得到的参数，构建轨迹生成函数所需的配置数组"""
         # 一些默认参数：
-        fz = 0.5e-03  # 每齿进给量
+        ## 铣刀参数
+        fz = 0.5e-03  # 每齿进给量 m/tooth
         tooth_number = 4  # 铣刀齿数
-
+        ## 铣削参数
+        ae = 12e-3 * params['ret'] / 7.5e-3  # /mm 铣削宽度
+        ap = -0.26e-3  # /mm 铣削深度
+        ## 仿真参数
         dt=0.00048  # 原始激光轨迹仿真时间步长
 
-        # 计算派生参数
+        ## 计算派生参数
         # wC = nC * 2 * np.pi/60  # 主轴角速度 (rad/s)
-        scan_angle = 2 * np.arcsin(params['ae'] / 2 / params['ret'])  # 激光扫描角 (rad)
+        scan_angle = 2 * np.arcsin(ae / 2 / params['ret'])  # 激光扫描角 (rad)
         fr = fz * tooth_number  # 每转进给距离 (m/r)
         fx = fr * params['nr'] / 60  # X方向进给率 (m/s)，认为为进给率
         fy = 0
@@ -734,7 +794,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
         # 配置数组（各元素含义见轨迹生成函数文档）
         return {
-            "ae": params['ae'], "ap": params['ap'],  # 铣削参数：铣削宽度，铣削深度，刀具有效半径
+            "ae": ae, "ap": ap,  # 铣削参数：铣削宽度，铣削深度，刀具有效半径
             "ret": params['ret'], "fz":fz,"tooth_number":tooth_number,"nr":params["nr"],  # 刀具参数：刀具有效直径、每齿进给量、齿数、主轴转速
             "alpha":params['k'] / (params['cp'] * params['rho']),  # 材料参数：热扩散系数 alpha
             "laser_r": params['laser_r'], "scan_angle":scan_angle, "beta_b":50,  # 激光参数：激光半径，激光扫描角度，beta_b = 50
@@ -809,12 +869,12 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 'x_scope': self.x_scope, 'y_scope': self.y_scope
             }
 
-            self.show_status_message("生成刀具轨迹完毕", "success")
+            self.show_status_message("生成铣刀轨迹完毕", "success")
             # 如果当前页面是刀具轨迹页则刷新，否则提示
             if self.stackedWidget.currentIndex() == 0:
                 self._refresh_cutter_display()
             else:
-                self.show_status_message("刀具轨迹已生成，切换至【刀具轨迹页面】查看", "info")
+                self.show_status_message("铣刀轨迹已生成，切换至【铣刀轨迹页面】查看", "info")
 
         except Exception as e:
             self.show_status_message(f"计算错误: {e}", "error")
@@ -959,7 +1019,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             if self.stackedWidget.currentIndex() == 2:
                 self._refresh_heat_display()
             else:
-                self.show_status_message("热场图已生成，切换至【热场动画页面】查看", "info")
+                self.show_status_message("热场动画已生成，切换至【热场动画页面】查看", "info")
 
             # method_name = "等弧长采样" if result['method'] == 'even' else ""
             # self.show_status_message(f"生成{method_name}温度场二维切片图完毕", "success")
