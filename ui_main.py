@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'ui_maingbyrrf.ui'
+## Form generated from reading UI file 'ui_mainWdlBif.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.15.2
 ##
@@ -298,15 +298,19 @@ class Ui_MainWindow(object):
         self.btn_clear_params.setStyleSheet(u"QPushButton::hover{\n"
 "	background-color:rgb(65,184,131);\n"
 "}")
-        self.btn_interval_exec = QPushButton(self.Input)
-        self.btn_interval_exec.setObjectName(u"btn_interval_exec")
-        self.btn_interval_exec.setGeometry(QRect(10, 620, 91, 41))
+        self.btn_gecode_simulation = QPushButton(self.Input)
+        self.btn_gecode_simulation.setObjectName(u"btn_gecode_simulation")
+        self.btn_gecode_simulation.setGeometry(QRect(10, 620, 91, 41))
         self.label_15 = QLabel(self.Input)
         self.label_15.setObjectName(u"label_15")
         self.label_15.setGeometry(QRect(300, 80, 61, 16))
         self.lineEdit_fv = QLineEdit(self.Input)
         self.lineEdit_fv.setObjectName(u"lineEdit_fv")
         self.lineEdit_fv.setGeometry(QRect(370, 80, 71, 21))
+        self.textEdit_gcode_display = QTextEdit(self.Input)
+        self.textEdit_gcode_display.setObjectName(u"textEdit_gcode_display")
+        self.textEdit_gcode_display.setGeometry(QRect(150, 480, 471, 281))
+        self.textEdit_gcode_display.setReadOnly(True)
 
         self.gridLayout.addWidget(self.Input, 0, 0, 1, 1)
 
@@ -483,7 +487,7 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
 
         self.comboBox_trajectory_type.setCurrentIndex(0)
-        self.stackedWidget_params.setCurrentIndex(2)
+        self.stackedWidget_params.setCurrentIndex(1)
         self.stackedWidget.setCurrentIndex(2)
 
 
@@ -558,11 +562,12 @@ class Ui_MainWindow(object):
 #endif // QT_CONFIG(tooltip)
         self.btn_clear_params.setText(QCoreApplication.translate("MainWindow", u"\u6e05\u7a7a\u53c2\u6570\u8f93\u5165", None))
 #if QT_CONFIG(tooltip)
-        self.btn_interval_exec.setToolTip(QCoreApplication.translate("MainWindow", u"\u70b9\u51fb\u5f39\u51fa\u5750\u6807\u8f93\u5165\u8868\u683c", None))
+        self.btn_gecode_simulation.setToolTip(QCoreApplication.translate("MainWindow", u"\u70b9\u51fb\u5f39\u51fa\u5750\u6807\u8f93\u5165\u8868\u683c", None))
 #endif // QT_CONFIG(tooltip)
-        self.btn_interval_exec.setText(QCoreApplication.translate("MainWindow", u"\u6b65\u8fdb\u6267\u884c", None))
+        self.btn_gecode_simulation.setText(QCoreApplication.translate("MainWindow", u"\u6a21\u62df\u6821\u9a8c", None))
         self.label_15.setText(QCoreApplication.translate("MainWindow", u"\u8fdb\u7ed9\u901f\u7387", None))
         self.lineEdit_fv.setPlaceholderText(QCoreApplication.translate("MainWindow", u"mm/min", None))
+        self.textEdit_gcode_display.setPlaceholderText(QCoreApplication.translate("MainWindow", u"G \u4ee3\u7801\u6587\u4ef6\u5185\u5bb9\u5c06\u663e\u793a\u5728\u6b64\u5904...", None))
         self.textEdit_status.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"

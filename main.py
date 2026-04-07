@@ -14,6 +14,7 @@ import warnings
 from datetime import datetime
 import html
 import time
+import re
 
 # PyQt5 GUI相关模块
 from PyQt5.QtWidgets import (
@@ -83,7 +84,7 @@ class HeatTrajThread(QThread):
 
             # 网格参数（分辨率固定，范围动态）
             nx, ny, nz = 200, 200, 10
-            Lz = 0.005  # 厚度方向固定
+            Lz = 0.025  # 厚度方向固定
 
             # 根据激光轨迹计算动态 X/Y 范围
             x_traj_centered = self.x_laser
@@ -394,10 +395,10 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         # 5. 初始化默认配置
         self.init_status_frame()  # 初始化状态显示区
         self.disable_animation_buttons()  # 初始禁用动画按钮
-        # 定义刀具和激光轨迹x，y画布范围
+        # 定义刀具和激光轨迹x，y画布范围（最大范围）
         Lx, Ly, Lz = 0.1, 0.1, 0.005
-        self.x_scope = [-0.02, Lx]
-        self.y_scope = [-0.02, Ly]
+        self.x_scope = [-0.05, Lx]
+        self.y_scope = [-0.05, Ly]
         # 定义激光轨迹点
         self.x_laser = []
         self.y_laser = []
@@ -442,6 +443,122 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
         # 动画控制按钮（后续动态绑定）
         self.connect_animation_buttons()
+
+        # G代码相关按钮
+        self.btn_upload_gcode.clicked.connect(self.upload_gcode_file)
+
+    # ========================== G代码相关逻辑 ==========================
+    def upload_gcode_file(self):
+        """打开文件对话框，选择 txt 或 gcode 文件，解析参数和轨迹点，更新界面"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择 G 代码文件",
+            "",
+            "文本文件 (*.txt);;G代码文件 (*.gcode);;所有文件 (*.*)"
+        )
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            # 存储解析结果
+            params = {}  # 参数名 -> 数值（字符串形式）
+            points = []  # 坐标点列表 (x_m, y_m)
+
+            # 正则表达式
+            def_line_pattern = re.compile(r'DEF\s+REAL\s+(.+)', re.IGNORECASE)
+            g_code_pattern = re.compile(r'G(?:01|02|03)\s+.*', re.IGNORECASE)
+            x_pattern = re.compile(r'X([+-]?\d*\.?\d+)', re.IGNORECASE)
+            y_pattern = re.compile(r'Y([+-]?\d*\.?\d+)', re.IGNORECASE)
+            f_pattern = re.compile(r'F(\d+(?:\.\d+)?)', re.IGNORECASE)
+            s_pattern = re.compile(r'S(\d+(?:\.\d+)?)', re.IGNORECASE)
+
+            for line in lines:
+                line = line.strip()
+                # 1. 解析 DEF REAL 行
+                def_match = def_line_pattern.match(line)
+                if def_match:
+                    # 提取等号后的部分，例如 "Diameter = 15.0, k=15, rho=7800, ..."
+                    content = def_match.group(1)
+                    # 按逗号分割多个赋值语句
+                    assignments = content.split(',')
+                    for assign in assignments:
+                        assign = assign.strip()
+                        if '=' in assign:
+                            var, val = assign.split('=', 1)
+                            var = var.strip()
+                            try:
+                                # 转换为浮点数，再转为字符串（保留原数值）
+                                num_val = float(val.strip())
+                                params[var] = str(num_val)
+                            except:
+                                pass
+                    continue
+
+                # 2. 提取 F 和 S 参数（可能出现在任意行）
+                f_match = f_pattern.search(line)
+                if f_match:
+                    params['F'] = f_match.group(1)
+                s_match = s_pattern.search(line)
+                if s_match:
+                    params['S'] = s_match.group(1)
+
+                # 3. 提取 G01/G02/G03 行中的 X Y 坐标
+                if re.search(r'G(?:01|02|03)', line, re.IGNORECASE):
+                    x_match = x_pattern.search(line)
+                    y_match = y_pattern.search(line)
+                    if x_match and y_match:
+                        x_mm = float(x_match.group(1))
+                        y_mm = float(y_match.group(1))
+                        # 转换为米
+                        points.append((x_mm / 1000.0, y_mm / 1000.0))
+
+            # 更新 UI 参数
+            # 参数映射：G代码变量名 -> UI控件名
+            param_mapping = {
+                'Diameter': 'lineEdit_Det',  # 直径 mm
+                'k': 'lineEdit_k',
+                'rho': 'lineEdit_rho',
+                'cp': 'lineEdit_cp',
+                'Laser_p': 'lineEdit_source_power',
+                'Laser_r': 'lineEdit_rb0',  # 半径 mm
+                'F': 'lineEdit_fv',  # 进给速率 mm/min
+                'S': 'lineEdit_nC'  # 主轴转速 r/min
+            }
+            for gcode_var, ui_name in param_mapping.items():
+                if gcode_var in params:
+                    widget = getattr(self, ui_name, None)
+                    if widget:
+                        widget.setText(params[gcode_var])
+                        self.show_status_message(f"已更新参数 {gcode_var} = {params[gcode_var]}", "info")
+
+            # 更新轨迹点
+            if points:
+                self.coordinates = points
+                self.saved_coordinates = points.copy()
+                self.last_coordinates = points.copy()
+                self.show_status_message(f"已提取 {len(points)} 个轨迹点（G01/G02/G03）", "success")
+
+                # 可选：自动打开坐标输入窗口预览
+                reply = QMessageBox.question(
+                    self, "坐标点已更新",
+                    f"已提取 {len(points)} 个轨迹点，是否立即查看/编辑？",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    self.open_coord_dialog()
+            else:
+                self.show_status_message("未提取到有效的 G01/G02/G03 轨迹点", "warning")
+
+            # 显示文件内容到文本编辑框（可选）
+            self.textEdit_gcode_display.setPlainText(''.join(lines))
+            self.show_status_message(f"已加载G代码文件: {file_path}", "success")
+
+        except Exception as e:
+            self.show_status_message(f"解析文件失败: {e}", "error")
+            self.textEdit_gcode_display.setPlainText("")
 
     # ========================== 页面切换逻辑 ==========================
     def switch_to_page(self, index):
@@ -643,7 +760,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 "lineEdit_Det": "15",  # 刀具直径 (mm)
                 # "lineEdit_ae": "12e-3",  # 铣削宽度 (m)
                 # "lineEdit_ap": "-0.26e-3",  # 切削深度 (m)
-                "lineEdit_nC": "1200",  # 主轴转速 (r/min)  # 这个参数是根据加工材料、刀具材料、加工条件等确定，一般不影响刀具运动
+                "lineEdit_nC": "600",  # 主轴转速 (r/min)  # 这个参数是根据加工材料、刀具材料、加工条件等确定，一般不影响刀具运动
                 "lineEdit_fv": "800",  #  进给速率 (mm/nin)
                 "lineEdit_k": "15",  # 热传导系数 (W/(m·K))
                 "lineEdit_rho": "7800",  # 材料密度 (kg/m³)
@@ -863,12 +980,24 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             # self.show_status_message(f"生成多段轨迹，共{len(self.coordinates)}个点", "info")
             x_cutter, y_cutter, cutter_info = cutter_trajectory(con_array, common_params['coordinates'])
 
-            # 存储数据
+            # 存储数据，固定大小
             self.cutter_data = {
                 'x': x_cutter, 'y': y_cutter,
                 'ret': common_params['ret'],
                 'x_scope': self.x_scope, 'y_scope': self.y_scope
             }
+            # 计算刀具轨迹实际范围，并添加边距，实现动态调整大小，但是实际效果不好，还是用固定画布
+            # x_min, x_max = np.min(x_cutter), np.max(x_cutter)
+            # y_min, y_max = np.min(y_cutter), np.max(y_cutter)
+            # margin = common_params['ret'] * 1.5  # 刀具半径的1.5倍
+            # x_scope = [x_min - margin, x_max + margin]
+            # y_scope = [y_min - margin, y_max + margin]
+            #
+            # self.cutter_data = {
+            #     'x': x_cutter, 'y': y_cutter,
+            #     'ret': common_params['ret'],
+            #     'x_scope': x_scope, 'y_scope': y_scope
+            # }
 
             self.show_status_message("生成铣刀轨迹完毕", "success")
             # 如果当前页面是刀具轨迹页则刷新，否则提示
@@ -896,12 +1025,28 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             self.vLaser=vLaser
             self.nt_fit_cutter = len(self.x_laser)
 
-            # 存储数据
+            # # 存储数据，固定画布
+            # self.laser_data = {
+            #     'x_cutter': x_cutter, 'y_cutter': y_cutter,
+            #     'ret': common_params['ret'], 'rb0': common_params['laser_r'],
+            #     'x_laser': x_rotated, 'y_laser': y_rotated,
+            #     'x_scope': self.x_scope, 'y_scope': self.y_scope,
+            #     'is_opt': False
+            # }
+            # 计算激光轨迹实际范围（合并所有分段）
+            all_x = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated, list) else x_rotated
+            all_y = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated, list) else y_rotated
+            x_min, x_max = np.min(all_x), np.max(all_x)
+            y_min, y_max = np.min(all_y), np.max(all_y)
+            margin = max(common_params['ret'] * 1.5, common_params['laser_r'] * 3)  # 取刀具半径1.5倍或光斑半径3倍的最大值
+            x_scope = [x_min - margin, x_max + margin]
+            y_scope = [y_min - margin, y_max + margin]
+
             self.laser_data = {
                 'x_cutter': x_cutter, 'y_cutter': y_cutter,
                 'ret': common_params['ret'], 'rb0': common_params['laser_r'],
                 'x_laser': x_rotated, 'y_laser': y_rotated,
-                'x_scope': self.x_scope, 'y_scope': self.y_scope,
+                'x_scope': x_scope, 'y_scope': y_scope,
                 'is_opt': False
             }
 
@@ -931,12 +1076,29 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             self.y_laser = np.concatenate(y_rotated)
             self.vLaser=vLaser
 
-            # 存储数据
+            # # 存储数据，固定画布
+            # self.laser_data = {
+            #     'x_cutter': x_cutter, 'y_cutter': y_cutter,
+            #     'ret': common_params['ret'], 'rb0': common_params['laser_r'],
+            #     'x_laser': x_rotated, 'y_laser': y_rotated,
+            #     'x_scope': self.x_scope, 'y_scope': self.y_scope,
+            #     'is_opt': True
+            # }
+
+            # 计算激光轨迹实际范围（合并所有分段），动态画布
+            all_x = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated, list) else x_rotated
+            all_y = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated, list) else y_rotated
+            x_min, x_max = np.min(all_x), np.max(all_x)
+            y_min, y_max = np.min(all_y), np.max(all_y)
+            margin = max(common_params['ret'] * 1.5, common_params['laser_r'] * 3)
+            x_scope = [x_min - margin, x_max + margin]
+            y_scope = [y_min - margin, y_max + margin]
+
             self.laser_data = {
                 'x_cutter': x_cutter, 'y_cutter': y_cutter,
                 'ret': common_params['ret'], 'rb0': common_params['laser_r'],
                 'x_laser': x_rotated, 'y_laser': y_rotated,
-                'x_scope': self.x_scope, 'y_scope': self.y_scope,
+                'x_scope': x_scope, 'y_scope': y_scope,
                 'is_opt': True
             }
 

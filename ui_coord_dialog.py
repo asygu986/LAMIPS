@@ -89,7 +89,7 @@ class CoordInputDialog(QDialog):
     def set_cell_editor(self, row, col):
         """为单元格设置数字输入框"""
         spin_box = QDoubleSpinBox()
-        spin_box.setDecimals(3)  # 6位小数
+        spin_box.setDecimals(4)  # 6位小数
         spin_box.setRange(-10, 10)  # 根据实际情况调整范围
         spin_box.setSingleStep(0.001)  # 添加上下三角步长为0.001
         spin_box.setValue(0.0)

@@ -202,8 +202,8 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
         if i == 0:
             tbs.append(np.linspace(0, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
             # print("优化前各段周期数", round(period_num[i]))
-        elif (x_cutter[i+1],y_cutter[i+1]) == (x_cutter[0], y_cutter[0]):  # 用于当加工一个闭合面时激光免于重合
-            tbs.append(np.linspace(11 * T1, (round(period_num[i]) -20)* T1, round(period_num[i]) * (point_of_one_pass + 1)))
+        # elif (x_cutter[i+1],y_cutter[i+1]) == (x_cutter[0], y_cutter[0]):  # 用于当加工一个闭合面时激光免于重合，没必要，其实这时候一般已经冷却了
+        #     tbs.append(np.linspace(11 * T1, (round(period_num[i]) -20)* T1, round(period_num[i]) * (point_of_one_pass + 1)))
         else:
             tbs.append(np.linspace(11 * T1, round(period_num[i]) * T1, round(period_num[i]) * (point_of_one_pass + 1)))
             # print("优化前各段周期数", round(period_num[i])-8)
@@ -324,8 +324,8 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
         assert isinstance(step, (float, int, np.number)), "step is not a number"
         if i == 0:
             period_num = round(laser_length[i] / step+1e-9)-1
-        elif (x_cutter[i+1],y_cutter[i+1]) == (x_cutter[0], y_cutter[0]):  # 用于当加工一个闭合面时激光免于重合
-            period_num = round((seg_lengths[i]-2*ret) / step+ 1e-9)-1
+        # elif (x_cutter[i+1],y_cutter[i+1]) == (x_cutter[0], y_cutter[0]):  # 用于当加工一个闭合面时激光免于重合，其实没必要
+        #     period_num = round((seg_lengths[i]-2*ret) / step+ 1e-9)-1
         else:
             period_num = round(seg_lengths[i] / step+ 1e-9)-1
         # print("优化后各段周期数", period_num)

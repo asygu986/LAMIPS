@@ -852,7 +852,7 @@ QPushButton::hover{
         <string>清空参数输入</string>
        </property>
       </widget>
-      <widget class="QPushButton" name="btn_interval_exec">
+      <widget class="QPushButton" name="btn_gecode_simulation">
        <property name="geometry">
         <rect>
          <x>10</x>
@@ -865,7 +865,7 @@ QPushButton::hover{
         <string>点击弹出坐标输入表格</string>
        </property>
        <property name="text">
-        <string>步进执行</string>
+        <string>模拟校验</string>
        </property>
       </widget>
       <widget class="QLabel" name="label_15">
@@ -892,6 +892,22 @@ QPushButton::hover{
        </property>
        <property name="placeholderText">
         <string>mm/min</string>
+       </property>
+      </widget>
+      <widget class="QTextEdit" name="textEdit_gcode_display">
+       <property name="geometry">
+        <rect>
+         <x>150</x>
+         <y>480</y>
+         <width>471</width>
+         <height>281</height>
+        </rect>
+       </property>
+       <property name="readOnly">
+        <bool>true</bool>
+       </property>
+       <property name="placeholderText">
+        <string>G 代码文件内容将显示在此处...</string>
        </property>
       </widget>
      </widget>
