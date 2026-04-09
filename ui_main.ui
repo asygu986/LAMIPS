@@ -865,7 +865,7 @@ QPushButton::hover{
         <string>点击弹出坐标输入表格</string>
        </property>
        <property name="text">
-        <string>模拟校验</string>
+        <string>步进模拟</string>
        </property>
       </widget>
       <widget class="QLabel" name="label_15">
@@ -907,7 +907,7 @@ QPushButton::hover{
         <bool>true</bool>
        </property>
        <property name="placeholderText">
-        <string>G 代码文件内容将显示在此处...</string>
+        <string>G代码文件内容将显示在此处...</string>
        </property>
       </widget>
      </widget>

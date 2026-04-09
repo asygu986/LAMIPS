@@ -272,7 +272,7 @@ def laser_matplotlib_plot(x_cutter, y_cutter, Ret, rb0, x_laser=None, y_laser=No
 
     ax.set_xlabel('X/m', fontsize=10)
     ax.set_ylabel('Y/m', fontsize=10)
-    plt.axis('equal')
+    ax.set_aspect('auto')  # 或直接删除该行
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.ticklabel_format(style='sci', axis='both', scilimits=(0, 0))
     ax.set_title('优化激光扫描轨迹' if is_opt else '原始激光扫描轨迹', fontsize=10, fontweight='bold')

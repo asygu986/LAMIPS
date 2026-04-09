@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'ui_mainWdlBif.ui'
+## Form generated from reading UI file 'ui_mainfQLiQu.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.15.2
 ##
@@ -564,10 +564,10 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(tooltip)
         self.btn_gecode_simulation.setToolTip(QCoreApplication.translate("MainWindow", u"\u70b9\u51fb\u5f39\u51fa\u5750\u6807\u8f93\u5165\u8868\u683c", None))
 #endif // QT_CONFIG(tooltip)
-        self.btn_gecode_simulation.setText(QCoreApplication.translate("MainWindow", u"\u6a21\u62df\u6821\u9a8c", None))
+        self.btn_gecode_simulation.setText(QCoreApplication.translate("MainWindow", u"\u6b65\u8fdb\u6a21\u62df", None))
         self.label_15.setText(QCoreApplication.translate("MainWindow", u"\u8fdb\u7ed9\u901f\u7387", None))
         self.lineEdit_fv.setPlaceholderText(QCoreApplication.translate("MainWindow", u"mm/min", None))
-        self.textEdit_gcode_display.setPlaceholderText(QCoreApplication.translate("MainWindow", u"G \u4ee3\u7801\u6587\u4ef6\u5185\u5bb9\u5c06\u663e\u793a\u5728\u6b64\u5904...", None))
+        self.textEdit_gcode_display.setPlaceholderText(QCoreApplication.translate("MainWindow", u"G\u4ee3\u7801\u6587\u4ef6\u5185\u5bb9\u5c06\u663e\u793a\u5728\u6b64\u5904...", None))
         self.textEdit_status.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"

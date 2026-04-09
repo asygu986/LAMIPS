@@ -19,8 +19,9 @@ import re
 # PyQt5 GUI相关模块
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QVBoxLayout,
-    QWidget, QPushButton, QMessageBox
+    QWidget, QPushButton, QMessageBox,QTextEdit
 )
+from PyQt5.QtGui import QTextCursor, QColor, QTextFormat
 from PyQt5.QtCore import (
     QThread, pyqtSignal, pyqtSlot, QMetaObject, Qt
 )
@@ -396,9 +397,9 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.init_status_frame()  # 初始化状态显示区
         self.disable_animation_buttons()  # 初始禁用动画按钮
         # 定义刀具和激光轨迹x，y画布范围（最大范围）
-        Lx, Ly, Lz = 0.1, 0.1, 0.005
-        self.x_scope = [-0.05, Lx]
-        self.y_scope = [-0.05, Ly]
+        Lx, Ly, Lz = 0.05, 0.05, 0.005
+        self.x_scope = [-0.02, Lx]
+        self.y_scope = [-0.02, Ly]
         # 定义激光轨迹点
         self.x_laser = []
         self.y_laser = []
@@ -412,6 +413,14 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.heat_animation_controller = None  # 动画控制器
 
         self.switch_to_page(0)  # 默认显示刀具轨迹页
+
+        # G 代码逐行模拟相关属性
+        self.gcode_lines = []  # 存储 G 代码行的列表
+        self.gcode_line_index = 0  # 当前行索引
+        self.gcode_timer = None  # 定时器，用于逐行处理
+        # G 代码逐行模拟时动态生成轨迹的辅助属性
+        self.gcode_processed_points = []  # 已处理的加工点列表（按顺序）
+        self.gcode_next_point_idx = 0  # 下一个要处理的加工点索引
 
     # ========================== UI事件绑定 ==========================
     def _bind_ui_events(self):
@@ -446,6 +455,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
         # G代码相关按钮
         self.btn_upload_gcode.clicked.connect(self.upload_gcode_file)
+        self.btn_gecode_simulation.clicked.connect(self.on_gcode_simulation)
+
 
     # ========================== G代码相关逻辑 ==========================
     def upload_gcode_file(self):
@@ -559,6 +570,213 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.show_status_message(f"解析文件失败: {e}", "error")
             self.textEdit_gcode_display.setPlainText("")
+
+    def _highlight_line(self, line_number):
+        doc = self.textEdit_gcode_display.document()
+        cursor = QTextCursor(doc)
+        cursor.movePosition(cursor.Start)
+        for _ in range(line_number):
+            cursor.movePosition(cursor.NextBlock)
+        cursor.movePosition(cursor.StartOfBlock, cursor.KeepAnchor)
+        cursor.movePosition(cursor.EndOfBlock, cursor.KeepAnchor)
+        extra_selection = QTextEdit.ExtraSelection()
+        extra_selection.cursor = cursor
+        extra_selection.format.setBackground(QColor(100, 100, 100))
+        extra_selection.format.setProperty(QTextFormat.FullWidthSelection, True)
+        self.textEdit_gcode_display.setExtraSelections([extra_selection])
+
+    def _clear_highlight(self):
+        """清除所有高亮"""
+        if self.textEdit_gcode_display:
+            self.textEdit_gcode_display.setExtraSelections([])
+
+    def on_gcode_simulation(self):
+        """逐行模拟 G 代码，加工行延时较长"""
+        # 如果已有定时器在运行，无法直接停止 singleShot，但可以通过重置标志忽略旧调用
+        # 简单起见，直接重置所有状态，旧调用执行时会因索引越界而退出
+        if self.gcode_timer and self.gcode_timer.isActive():
+            self.gcode_timer.stop()
+            self.gcode_timer = None
+            self._clear_highlight()
+            self.show_status_message("已停止之前的模拟", "info")
+
+        content = self.textEdit_gcode_display.toPlainText()
+        if not content.strip():
+            self.show_status_message("没有 G 代码内容，请先上传文件", "warning")
+            return
+
+        # 重置轨迹生成相关状态
+        self.gcode_processed_points = []
+        self.gcode_next_point_idx = 0
+
+        self.gcode_lines = content.splitlines()
+        if not self.gcode_lines:
+            self.show_status_message("文件为空", "warning")
+            return
+
+        self.gcode_line_index = 0
+        self._clear_highlight()
+
+        # 不再使用持续定时器，改用 singleShot 调度
+        self.gcode_timer = None
+        self._schedule_next_line(0)  # 立即处理第一行
+
+        self.show_status_message(f"开始模拟，共 {len(self.gcode_lines)} 行，加工行延时较长", "info")
+
+    def _schedule_next_line(self, delay_ms):
+        """在 delay_ms 毫秒后调用 _process_next_gcode_line"""
+        if self.gcode_line_index >= len(self.gcode_lines):
+            return
+        QTimer.singleShot(delay_ms, self._process_next_gcode_line)
+
+    def _process_next_gcode_line(self):
+        # 防止旧的 singleShot 在重置后执行
+        if self.gcode_line_index >= len(self.gcode_lines):
+            return
+
+        line = self.gcode_lines[self.gcode_line_index]
+        stripped = line.strip()
+
+        # 跳过以 % 开头的行以及程序名行（如 O1000）
+        if stripped.startswith('%') or re.match(r'^O\d+', stripped, re.IGNORECASE):
+            self.gcode_line_index += 1
+            # 跳过行也用短延时（100ms）
+            self._schedule_next_line(100)
+            return
+
+        # 显示读取信息和高亮
+        display_line = stripped if stripped else "(空行)"
+        self.show_status_message(f"读取：{display_line}", "info")
+        self._highlight_line(self.gcode_line_index)
+
+        # 滚动到当前行
+        cursor = self.textEdit_gcode_display.textCursor()
+        cursor.movePosition(cursor.Start)
+        for _ in range(self.gcode_line_index):
+            cursor.movePosition(cursor.NextBlock)
+        self.textEdit_gcode_display.setTextCursor(cursor)
+
+        # 判断是否为加工行（G01/G02/G03）
+        is_motion = re.search(r'G(?:01|02|03)', line, re.IGNORECASE) is not None
+
+        if is_motion:
+            if not hasattr(self, 'coordinates') or not self.coordinates:
+                self.show_status_message("未找到加工点坐标，请先上传 G 代码文件", "warning")
+            else:
+                if self.gcode_next_point_idx < len(self.coordinates):
+                    point = self.coordinates[self.gcode_next_point_idx]
+                    self.gcode_processed_points.append(point)
+                    self.gcode_next_point_idx += 1
+                    self.show_status_message(
+                        f"读取到加工点 {self.gcode_next_point_idx}: ({point[0] * 1000:.3f}, {point[1] * 1000:.3f}) mm",
+                        "info"
+                    )
+                    # 无论点数多少，都调用生成函数（内部会处理单点情况）
+                    self._generate_and_display_trajectory(self.gcode_processed_points)
+                else:
+                    self.show_status_message("警告：加工点索引超出范围，请检查 G 代码与坐标点是否匹配", "warning")
+            next_delay = 4000  # 加工行延时
+        else:
+            # 非加工行延时较短（例如 300ms）
+            next_delay = 300
+
+        self.gcode_line_index += 1
+
+        # 如果还有下一行，调度
+        if self.gcode_line_index < len(self.gcode_lines):
+            self._schedule_next_line(next_delay)
+        else:
+            # 模拟结束
+            self._clear_highlight()
+            self.show_status_message("G 代码模拟完成", "success")
+
+    def _generate_and_display_trajectory(self, points):
+        """
+        根据点列表生成刀具和激光轨迹并显示。支持单点情况（只显示一个点）。
+        使用固定画布范围 self.x_scope, self.y_scope
+        """
+        if len(points) == 0:
+            return
+        try:
+            common_params = self._get_common_parameters()
+            traj_params = self.get_current_trajectory_params()
+            con_array = self._get_con_array(common_params)
+
+            # 更新 con_array 中的坐标相关参数
+            con_array['coordinates'] = points
+            con_array['X0Cutter'] = points[0][0]
+            con_array['Y0Cutter'] = points[0][1]
+            con_array['X0Laser'] = points[0][0] + con_array['bias']
+
+            # 固定画布范围（使用全局定义的固定范围）
+            x_scope = self.x_scope
+            y_scope = self.y_scope
+
+            if len(points) == 1:
+                # 刀具点
+                x_cutter = np.array([points[0][0]])
+                y_cutter = np.array([points[0][1]])
+                # 激光点：添加固定偏置（使用刀具半径作为偏置量）
+                bias = con_array["ret"]  # 米
+                laser_x = points[0][0] + bias
+                laser_y = points[0][1]  # 可根据需要添加 Y 方向偏置，此处暂为0
+                x_laser_seg = [np.array([laser_x])]
+                y_laser_seg = [np.array([laser_y])]
+                vLaser = 0
+                # 全局激光点（一维数组），用于热场计算
+                self.x_laser = np.array([laser_x])
+                self.y_laser = np.array([laser_y])
+                self.vLaser = 0
+                self.nt_fit_cutter = 1
+
+                self.laser_data = {
+                    'x_cutter': x_cutter,
+                    'y_cutter': y_cutter,
+                    'ret': common_params['ret'],
+                    'rb0': common_params['laser_r'],
+                    'x_laser': x_laser_seg,
+                    'y_laser': y_laser_seg,
+                    'x_scope': x_scope,
+                    'y_scope': y_scope,
+                    'is_opt': False
+                }
+                self.show_status_message("已记录进刀点（激光点有偏置），等待下一个加工点生成轨迹", "info")
+            else:
+                # 两点及以上，正常生成轨迹
+                x_cutter, y_cutter, cutter_info = cutter_trajectory(con_array, points)
+                x_rotated, y_rotated, vLaser = sweeping_laser_trajectory_with_distance_preservation(
+                    con_array, traj_params, x_cutter, y_cutter, cutter_info
+                )
+                # 合并分段激光轨迹为一维数组，用于热场计算
+                self.x_laser = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated,
+                                                                                                  list) else x_rotated
+                self.y_laser = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated,
+                                                                                                  list) else y_rotated
+                self.vLaser = vLaser
+                self.nt_fit_cutter = len(self.x_laser)
+
+                self.laser_data = {
+                    'x_cutter': x_cutter,
+                    'y_cutter': y_cutter,
+                    'ret': common_params['ret'],
+                    'rb0': common_params['laser_r'],
+                    'x_laser': x_rotated,
+                    'y_laser': y_rotated,
+                    'x_scope': x_scope,
+                    'y_scope': y_scope,
+                    'is_opt': False
+                }
+                self.show_status_message(f"已生成从第1点到第{len(points)}点的刀具和激光轨迹", "success")
+
+            # 刷新显示（如果当前在激光轨迹页面）
+            if self.stackedWidget.currentIndex() == 1:
+                self._refresh_laser_display()
+            else:
+                self.show_status_message("激光轨迹已生成，切换至【激光扫描轨迹页面】查看", "info")
+
+        except Exception as e:
+            self.show_status_message(f"生成轨迹失败: {e}", "error")
+            traceback.print_exc()
 
     # ========================== 页面切换逻辑 ==========================
     def switch_to_page(self, index):
@@ -1026,29 +1244,29 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             self.nt_fit_cutter = len(self.x_laser)
 
             # # 存储数据，固定画布
-            # self.laser_data = {
-            #     'x_cutter': x_cutter, 'y_cutter': y_cutter,
-            #     'ret': common_params['ret'], 'rb0': common_params['laser_r'],
-            #     'x_laser': x_rotated, 'y_laser': y_rotated,
-            #     'x_scope': self.x_scope, 'y_scope': self.y_scope,
-            #     'is_opt': False
-            # }
-            # 计算激光轨迹实际范围（合并所有分段）
-            all_x = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated, list) else x_rotated
-            all_y = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated, list) else y_rotated
-            x_min, x_max = np.min(all_x), np.max(all_x)
-            y_min, y_max = np.min(all_y), np.max(all_y)
-            margin = max(common_params['ret'] * 1.5, common_params['laser_r'] * 3)  # 取刀具半径1.5倍或光斑半径3倍的最大值
-            x_scope = [x_min - margin, x_max + margin]
-            y_scope = [y_min - margin, y_max + margin]
-
             self.laser_data = {
                 'x_cutter': x_cutter, 'y_cutter': y_cutter,
                 'ret': common_params['ret'], 'rb0': common_params['laser_r'],
                 'x_laser': x_rotated, 'y_laser': y_rotated,
-                'x_scope': x_scope, 'y_scope': y_scope,
+                'x_scope': self.x_scope, 'y_scope': self.y_scope,
                 'is_opt': False
             }
+            # 计算激光轨迹实际范围（合并所有分段）
+            # all_x = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated, list) else x_rotated
+            # all_y = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated, list) else y_rotated
+            # x_min, x_max = np.min(all_x), np.max(all_x)
+            # y_min, y_max = np.min(all_y), np.max(all_y)
+            # margin = max(common_params['ret'] * 1.5, common_params['laser_r'] * 3)  # 取刀具半径1.5倍或光斑半径3倍的最大值
+            # x_scope = [x_min - margin, x_max + margin]
+            # y_scope = [y_min - margin, y_max + margin]
+            #
+            # self.laser_data = {
+            #     'x_cutter': x_cutter, 'y_cutter': y_cutter,
+            #     'ret': common_params['ret'], 'rb0': common_params['laser_r'],
+            #     'x_laser': x_rotated, 'y_laser': y_rotated,
+            #     'x_scope': x_scope, 'y_scope': y_scope,
+            #     'is_opt': False
+            # }
 
             self.show_status_message("生成激光轨迹完毕", "success")
             if self.stackedWidget.currentIndex() == 1:
@@ -1076,31 +1294,31 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             self.y_laser = np.concatenate(y_rotated)
             self.vLaser=vLaser
 
-            # # 存储数据，固定画布
-            # self.laser_data = {
-            #     'x_cutter': x_cutter, 'y_cutter': y_cutter,
-            #     'ret': common_params['ret'], 'rb0': common_params['laser_r'],
-            #     'x_laser': x_rotated, 'y_laser': y_rotated,
-            #     'x_scope': self.x_scope, 'y_scope': self.y_scope,
-            #     'is_opt': True
-            # }
-
-            # 计算激光轨迹实际范围（合并所有分段），动态画布
-            all_x = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated, list) else x_rotated
-            all_y = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated, list) else y_rotated
-            x_min, x_max = np.min(all_x), np.max(all_x)
-            y_min, y_max = np.min(all_y), np.max(all_y)
-            margin = max(common_params['ret'] * 1.5, common_params['laser_r'] * 3)
-            x_scope = [x_min - margin, x_max + margin]
-            y_scope = [y_min - margin, y_max + margin]
-
+            # 存储数据，固定画布
             self.laser_data = {
                 'x_cutter': x_cutter, 'y_cutter': y_cutter,
                 'ret': common_params['ret'], 'rb0': common_params['laser_r'],
                 'x_laser': x_rotated, 'y_laser': y_rotated,
-                'x_scope': x_scope, 'y_scope': y_scope,
+                'x_scope': self.x_scope, 'y_scope': self.y_scope,
                 'is_opt': True
             }
+
+            # 计算激光轨迹实际范围（合并所有分段），动态画布
+            # all_x = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated, list) else x_rotated
+            # all_y = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated, list) else y_rotated
+            # x_min, x_max = np.min(all_x), np.max(all_x)
+            # y_min, y_max = np.min(all_y), np.max(all_y)
+            # margin = max(common_params['ret'] * 1.5, common_params['laser_r'] * 3)
+            # x_scope = [x_min - margin, x_max + margin]
+            # y_scope = [y_min - margin, y_max + margin]
+
+            # self.laser_data = {
+            #     'x_cutter': x_cutter, 'y_cutter': y_cutter,
+            #     'ret': common_params['ret'], 'rb0': common_params['laser_r'],
+            #     'x_laser': x_rotated, 'y_laser': y_rotated,
+            #     'x_scope': x_scope, 'y_scope': y_scope,
+            #     'is_opt': True
+            # }
 
             time_length=1*round(len(self.x_laser)/4600)
             time.sleep(time_length)
