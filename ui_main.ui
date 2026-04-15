@@ -667,9 +667,9 @@
       <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
-         <x>70</x>
-         <y>800</y>
-         <width>481</width>
+         <x>10</x>
+         <y>810</y>
+         <width>611</width>
          <height>41</height>
         </rect>
        </property>
@@ -737,6 +737,22 @@ QPushButton::hover{
           </property>
           <property name="text">
            <string>生成热场图</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btn_run_abaqus">
+          <property name="styleSheet">
+           <string notr="true">QPushButton{
+	background-color:rgb(255, 97, 139);
+	height:22px;
+}
+QPushButton::hover{
+	background-color:rgb(65,184,131);
+}</string>
+          </property>
+          <property name="text">
+           <string>执行Abaqus仿真</string>
           </property>
          </widget>
         </item>

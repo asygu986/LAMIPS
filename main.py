@@ -15,6 +15,9 @@ from datetime import datetime
 import html
 import time
 import re
+import os
+import subprocess  # 新增：替代os.system的库
+import glob  # 用于删除旧文件
 
 # PyQt5 GUI相关模块
 from PyQt5.QtWidgets import (
@@ -40,7 +43,7 @@ from plot_disp import InteractiveMatplotlibWidget
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-# ============================== 热轨迹计算线程类 ==============================
+# ============================== python热轨迹计算线程类 ==============================
 # 为了提升计算速率我进行了如下修改：
 # 降低网格分辨率，从300*300*25到100*100*10
 # 局部热源添加：不再生成整个网格的高斯分布，而是只计算激光中心周围有效区域（半径 3 倍光斑）内的网格点，大幅减少计算量。
@@ -123,7 +126,7 @@ class HeatTrajThread(QThread):
             # print("相配合时间点数:",self.nt_fitting)
             dt = self.con["dt"] * self.nt_fitting / nt
 
-            # print(f"轨迹点数: {nt}")
+            print(f"优化轨迹时间步长: {dt}")
             # 预计算激光参数
             alpha = self.params['k'] / (self.params['cp'] * self.params['rho'])
             vLaser = self.vLaser
@@ -358,6 +361,172 @@ class HeatTrajThread(QThread):
 
         self.status_update.emit("温度场计算完成！", "success")
 
+
+# ============================== Abaqus仿真后台线程类 ==============================
+# （解决界面卡顿+状态栏实时显示），注意，因为如果把增量步都显示出来，那样信息太多效果不好，所以还是直接在控制栏看计算过程吧
+class AbaqusSimThread(QThread):
+    status_signal = pyqtSignal(str, str)
+    finish_signal = pyqtSignal()
+    error_signal = pyqtSignal(str)
+
+    def __init__(self, for_file_name, inp_file_name, WORK_DIR, param_for, param_inp):
+        super().__init__()
+        self.for_file_name = for_file_name
+        self.inp_file_name = inp_file_name
+        self.WORK_DIR = WORK_DIR
+        self.param_for = param_for
+        self.param_inp = param_inp
+        self.last_progress = 0
+
+    def run(self):
+        try:
+            # ====================== 完全保留你的原有函数 ======================
+            def modify_subroutine(file_path_name, param_map):
+                INPUT_FOR_PATH = f"Abaqus_run/{file_path_name}.for"
+                OUTPUT_FOR_PATH = f"Abaqus_run/{file_path_name}_modified.for"
+                output_for_name = f"{file_path_name}_modified"
+                with open(INPUT_FOR_PATH, "r", encoding="utf-8") as f:
+                    text = f.read()
+                for param, value in param_map.items():
+                    pattern = rf"({param}\s*=\s*)\d+(\.\d+)?"
+                    text = re.sub(pattern, rf"\g<1>{value}", text)
+                with open(OUTPUT_FOR_PATH, "w", encoding="utf-8") as f:
+                    f.write(text)
+                self.status_signal.emit("===== for文件修改完成！====", "success")
+                return output_for_name
+
+            def modify_inp(inp_path_name, param_map):
+                INPUT_INP_PATH = f"Abaqus_run/{inp_path_name}.inp"
+                OUTPUT_INP_PATH = f"Abaqus_run/{inp_path_name}_modified.inp"
+                output_inp_name = f"{inp_path_name}_modified"
+                TOTAL_TIME = param_map["stepTime"]
+                X_FEED_SPEED = param_map["feedSpeed"]
+                ROTATE_SPEED = param_map["rotationSpeed"]
+                in_mill_step = False
+                next_line_is_time = False
+                in_bc2 = False
+                in_bc3 = False
+                with open(INPUT_INP_PATH, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                new_lines = []
+                for line in lines:
+                    raw_line = line
+                    strip_line = line.strip()
+                    if "** STEP: Mill" in raw_line:
+                        in_mill_step = True
+                        new_lines.append(raw_line)
+                        continue
+                    if in_mill_step and "*Dynamic Temperature-displacement, Explicit" in raw_line:
+                        new_lines.append(raw_line)
+                        next_line_is_time = True
+                        continue
+                    if next_line_is_time:
+                        new_line = f", {TOTAL_TIME}\n"
+                        new_lines.append(new_line)
+                        next_line_is_time = False
+                        in_mill_step = False
+                        continue
+                    if "** Name: BC-2" in raw_line:
+                        in_bc2 = True
+                        new_lines.append(raw_line)
+                        continue
+                    if in_bc2 and re.search(r'_PickedSet37\s*,\s*1\s*,\s*1', raw_line):
+                        new_line = f"_PickedSet37, 1, 1, {X_FEED_SPEED}\n"
+                        new_lines.append(new_line)
+                        in_bc2 = False
+                        continue
+                    if "** Name: BC-3" in raw_line:
+                        in_bc3 = True
+                        new_lines.append(raw_line)
+                        continue
+                    if in_bc3 and re.search(r'_PickedSet38\s*,\s*5\s*,\s*5', raw_line):
+                        new_line = f"_PickedSet38, 5, 5, {ROTATE_SPEED}\n"
+                        new_lines.append(new_line)
+                        in_bc3 = False
+                        continue
+                    new_lines.append(raw_line)
+                with open(OUTPUT_INP_PATH, "w", encoding="utf-8") as f:
+                    f.writelines(new_lines)
+                self.status_signal.emit("===== inp文件修改完成！====", "success")
+                return output_inp_name
+
+            # ====================== 执行流程 ======================
+            self.status_signal.emit("\n===== 开始文件修改 =====", "info")
+            output_for_name = modify_subroutine(self.for_file_name, self.param_for)
+            output_inp_name = modify_inp(self.inp_file_name, self.param_inp)
+            self.status_signal.emit(f"生成文件：{output_for_name}.for | {output_inp_name}.inp", "info")
+
+            os.chdir(self.WORK_DIR)
+            self.status_signal.emit(f"工作目录：{os.getcwd()}", "info")
+
+            # 清理旧文件
+            self.status_signal.emit("===== 清理旧计算文件 =====", "info")
+            for ext in ['*.odb', '*.sta', '*.msg', '*.log', '*.lck', '*.res', '*.prt', '*.abq']:
+                files = glob.glob(f"{output_inp_name}{ext}")
+                for file in files:
+                    try:
+                        os.remove(file)
+                        self.status_signal.emit(f"删除旧文件：{file}", "success")
+                    except:
+                        pass
+
+            # ====================== 启动Abaqus（实时输出 + 不卡顿） ======================
+            cmd = f"abaqus job={output_inp_name} user={output_for_name} cpus=2 int"
+            self.status_signal.emit(f"开始Abaqus计算...", "info")
+
+            # ✅ 关键修复：同时输出到控制台 + 解析进度
+            import threading
+            def read_output(stream):
+                last = 0
+                for line in iter(stream.readline, ''):
+                    line = line.strip()
+                    if not line: continue
+                    print(line)  # 命令行输出
+
+                    # 解析进度
+                    match = re.search(r'(\d+)%|Frame\s*[:=]\s*(\d+)|Increment\s*(\d+)', line, re.I)
+                    if match:
+                        p = None
+                        if match.group(1):
+                            p = int(match.group(1))
+                        elif match.group(2):
+                            p = min(int(match.group(2)) * 2, 100)
+                        elif match.group(3):
+                            p = min(int(match.group(3)) * 3, 100)
+
+                        if p and p - last >= 5:
+                            self.status_signal.emit(f"Abaqus计算进度：{p}%", "info")
+                            last = p
+
+            # 启动进程
+            process = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='gbk'
+            )
+
+            # 双线程读输出
+            t1 = threading.Thread(target=read_output, args=(process.stdout,))
+            t2 = threading.Thread(target=read_output, args=(process.stderr,))
+            t1.start()
+            t2.start()
+            t1.join()
+            t2.join()
+            process.wait()
+
+            # 打开CAE
+            self.status_signal.emit("===== 计算完成！打开Abaqus/CAE =====", "info")
+            subprocess.Popen(f"abaqus cae -database {output_inp_name}.odb", shell=True)
+
+            self.status_signal.emit("✅ Abaqus 仿真全部完成！", "success")
+            self.finish_signal.emit()
+
+        except Exception as e:
+            self.error_signal.emit(f"仿真失败：{str(e)}")
+
 # ============================== 主窗口类 ==============================
 class MyWindow(QMainWindow, Ui_MainWindow):
     """
@@ -397,7 +566,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.init_status_frame()  # 初始化状态显示区
         self.disable_animation_buttons()  # 初始禁用动画按钮
         # 定义刀具和激光轨迹x，y画布范围（最大范围）
-        Lx, Ly, Lz = 0.05, 0.05, 0.005
+        Lx, Ly, Lz = 0.08, 0.08, 0.005
         self.x_scope = [-0.02, Lx]
         self.y_scope = [-0.02, Ly]
         # 定义激光轨迹点
@@ -456,6 +625,9 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         # G代码相关按钮
         self.btn_upload_gcode.clicked.connect(self.upload_gcode_file)
         self.btn_gecode_simulation.clicked.connect(self.on_gcode_simulation)
+
+        # 联系abaqus仿真
+        self.btn_run_abaqus.clicked.connect(self.run_abaqus)
 
 
     # ========================== G代码相关逻辑 ==========================
@@ -975,16 +1147,16 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         try:
             # 默认参数字典（键：控件名，值：默认值）
             default_params = {
-                "lineEdit_Det": "15",  # 刀具直径 (mm)
+                "lineEdit_Det": "18",  # 刀具直径 (mm)
                 # "lineEdit_ae": "12e-3",  # 铣削宽度 (m)
                 # "lineEdit_ap": "-0.26e-3",  # 切削深度 (m)
-                "lineEdit_nC": "600",  # 主轴转速 (r/min)  # 这个参数是根据加工材料、刀具材料、加工条件等确定，一般不影响刀具运动
-                "lineEdit_fv": "800",  #  进给速率 (mm/nin)
+                "lineEdit_nC": "1200",  # 主轴转速 (r/min)  # 这个参数是根据加工材料、刀具材料、加工条件等确定，一般不影响刀具运动
+                "lineEdit_fv": "1800",  #  进给速率 (mm/nin)
                 "lineEdit_k": "15",  # 热传导系数 (W/(m·K))
                 "lineEdit_rho": "7800",  # 材料密度 (kg/m³)
                 "lineEdit_cp": "500",  # 比热容 (J/(kg·K))
-                "lineEdit_source_power": "2000",  # 激光功率 (W)
-                "lineEdit_rb0": "1.5",  # 激光光斑半径 (mm)
+                "lineEdit_source_power": "2500",  # 激光功率 (W)
+                "lineEdit_rb0": "2",  # 激光光斑半径 (mm)
             }
 
             # 设置默认值
@@ -1068,18 +1240,19 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
     def _get_common_parameters(self):
         """提取所有输入参数（材料、激光、切削参数），也是在计算轨迹和温度场时调用"""
+        # 一定注意，我们这里的参数均以m为单位
         try:
             # 从UI控件读取参数
-            ret = float(self.lineEdit_Det.text()) / 2000  # 刀具有效半径 (mm)
+            ret = float(self.lineEdit_Det.text()) / 2000  # 刀具有效半径 转化为(m)
             # ae = float(self.lineEdit_ae.text())  # 切削宽度 (m)
             # ap = float(self.lineEdit_ap.text())  # 切削深度 (m)
             nr = eval(self.lineEdit_nC.text())  # 主轴转速 (r/min)
-            fv = float(self.lineEdit_fv.text())/1000  # 进给速率 (mm/min)
+            fv = float(self.lineEdit_fv.text())/1000  # 进给速率 转化为(m/min)
             k = float(self.lineEdit_k.text())  # 热传导系数 (W/(m·K))
             rho = float(self.lineEdit_rho.text())  # 材料密度 (kg/m³)
             cp = float(self.lineEdit_cp.text())  # 比热容 (J/(kg·K))
             laser_p = float(self.lineEdit_source_power.text())  # 激光功率 (W)
-            laser_r = eval(self.lineEdit_rb0.text())/1000  # 激光光斑半径 (mm)
+            laser_r = eval(self.lineEdit_rb0.text())/1000  # 激光光斑半径 转化为(m)
 
             # 不需要专门输入的参数
             # 返回参数字典
@@ -1110,7 +1283,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         ## 计算派生参数
         # wC = nr * 2 * np.pi/60  # 主轴角速度 (rad/s)
         scan_angle = 2 * np.arcsin(ae / 2 / params['ret'])  # 激光扫描角 (rad)
-        fv = params["fv"]  # 铣刀进给速率 (mm/min)
+        fv = params["fv"]  # 铣刀进给速率 (m/min)
         # fr = fz * tooth_number  # 每转进给距离 (m/r)
         # fx = fr * params['nr'] / 60  # X方向进给率 (m/s)，认为为进给率
         # fy = 0
@@ -1204,18 +1377,6 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 'ret': common_params['ret'],
                 'x_scope': self.x_scope, 'y_scope': self.y_scope
             }
-            # 计算刀具轨迹实际范围，并添加边距，实现动态调整大小，但是实际效果不好，还是用固定画布
-            # x_min, x_max = np.min(x_cutter), np.max(x_cutter)
-            # y_min, y_max = np.min(y_cutter), np.max(y_cutter)
-            # margin = common_params['ret'] * 1.5  # 刀具半径的1.5倍
-            # x_scope = [x_min - margin, x_max + margin]
-            # y_scope = [y_min - margin, y_max + margin]
-            #
-            # self.cutter_data = {
-            #     'x': x_cutter, 'y': y_cutter,
-            #     'ret': common_params['ret'],
-            #     'x_scope': x_scope, 'y_scope': y_scope
-            # }
 
             self.show_status_message("生成铣刀轨迹完毕", "success")
             # 如果当前页面是刀具轨迹页则刷新，否则提示
@@ -1251,22 +1412,6 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 'x_scope': self.x_scope, 'y_scope': self.y_scope,
                 'is_opt': False
             }
-            # 计算激光轨迹实际范围（合并所有分段）
-            # all_x = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated, list) else x_rotated
-            # all_y = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated, list) else y_rotated
-            # x_min, x_max = np.min(all_x), np.max(all_x)
-            # y_min, y_max = np.min(all_y), np.max(all_y)
-            # margin = max(common_params['ret'] * 1.5, common_params['laser_r'] * 3)  # 取刀具半径1.5倍或光斑半径3倍的最大值
-            # x_scope = [x_min - margin, x_max + margin]
-            # y_scope = [y_min - margin, y_max + margin]
-            #
-            # self.laser_data = {
-            #     'x_cutter': x_cutter, 'y_cutter': y_cutter,
-            #     'ret': common_params['ret'], 'rb0': common_params['laser_r'],
-            #     'x_laser': x_rotated, 'y_laser': y_rotated,
-            #     'x_scope': x_scope, 'y_scope': y_scope,
-            #     'is_opt': False
-            # }
 
             self.show_status_message("生成激光轨迹完毕", "success")
             if self.stackedWidget.currentIndex() == 1:
@@ -1303,23 +1448,6 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 'is_opt': True
             }
 
-            # 计算激光轨迹实际范围（合并所有分段），动态画布
-            # all_x = np.concatenate([np.array(seg) for seg in x_rotated]) if isinstance(x_rotated, list) else x_rotated
-            # all_y = np.concatenate([np.array(seg) for seg in y_rotated]) if isinstance(y_rotated, list) else y_rotated
-            # x_min, x_max = np.min(all_x), np.max(all_x)
-            # y_min, y_max = np.min(all_y), np.max(all_y)
-            # margin = max(common_params['ret'] * 1.5, common_params['laser_r'] * 3)
-            # x_scope = [x_min - margin, x_max + margin]
-            # y_scope = [y_min - margin, y_max + margin]
-
-            # self.laser_data = {
-            #     'x_cutter': x_cutter, 'y_cutter': y_cutter,
-            #     'ret': common_params['ret'], 'rb0': common_params['laser_r'],
-            #     'x_laser': x_rotated, 'y_laser': y_rotated,
-            #     'x_scope': x_scope, 'y_scope': y_scope,
-            #     'is_opt': True
-            # }
-
             time_length=1*round(len(self.x_laser)/4600)
             time.sleep(time_length)
             self.show_status_message("优化激光轨迹完毕", "success")
@@ -1333,6 +1461,56 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.show_status_message(f"计算错误: {e}", "error")
 
+    # ========================== 联动abaqus ==========================
+    # 主窗口Abaqus按钮点击事件（仅启动线程，无阻塞）
+    def run_abaqus(self):
+        try:
+            common_params = self._get_common_parameters()
+            traj_params = self.get_current_trajectory_params()
+            con_array = self._get_con_array(common_params)
+
+            sys.stdout.reconfigure(encoding='utf-8')
+            x_cutter, y_cutter, cutter_info = cutter_trajectory(con_array, common_params['coordinates'])
+            totalTime = 0.04
+            laser_p = common_params['laser_p'] * 1000
+            laser_r = common_params['laser_r'] * 1000
+            fv = 500.0
+            ret = con_array["ret"] * 1000
+            nr = -500.0
+
+            param_for = {
+                "P": laser_p,
+                "LASER_R": laser_r,
+                "FV": fv,
+                "RET": ret
+            }
+            param_inp = {
+                'stepTime': totalTime,
+                "feedSpeed": fv,
+                "rotationSpeed": -nr
+            }
+
+            for_file_name = "laser_test"
+            inp_file_name = "Job_test"
+            WORK_DIR = r"Abaqus_run"
+
+            self.btn_run_abaqus.setEnabled(False)
+            self.btn_heat_even.setEnabled(False)
+
+            self.abaqus_thread = AbaqusSimThread(for_file_name, inp_file_name, WORK_DIR, param_for, param_inp)
+            self.abaqus_thread.status_signal.connect(self.show_status_message)
+            self.abaqus_thread.error_signal.connect(lambda msg: self.show_status_message(msg, "error"))
+            self.abaqus_thread.finish_signal.connect(self.on_abaqus_finish)
+            self.abaqus_thread.start()
+
+        except Exception as e:
+            self.show_status_message(f"启动abaqus仿真失败: {e}", "error")
+            self.btn_run_abaqus.setEnabled(True)
+            self.btn_heat_even.setEnabled(True)
+
+    def on_abaqus_finish(self):
+        self.btn_run_abaqus.setEnabled(True)
+        self.btn_heat_even.setEnabled(True)
 
     # ========================== 温度场计算 ==========================
     def _setup_heat_thread_connections(self):

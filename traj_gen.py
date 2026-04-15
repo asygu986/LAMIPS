@@ -32,7 +32,8 @@ def cutter_trajectory(con, coordinates):
     # fx = con['fx']  # X轴进给速度
     # fy = con['fy']  # 假设fy=0
     # fv = math.sqrt(fx ** 2) # 不考虑y轴进给速度
-    fv = con["fv"]
+    fv = con["fv"]/60  #  转化为 m/s
+
 
     if fv == 0:
         print("警告：进给速度为0，无法生成轨迹")
@@ -60,7 +61,7 @@ def cutter_trajectory(con, coordinates):
         sin_theta = dy / segment_length
 
         # 计算该段运动所需时间
-        segment_time = segment_length / fv  # 原本为fv
+        segment_time = segment_length / fv  # 注意这里我们长度采用的都是m，所以不用再特地化为mm
 
         segment_info = {
             'index': i,
@@ -144,14 +145,15 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
     # 计算轨迹用参数
     traj_type = traj_params['trajectory_type'].lower()
     params = traj_params['params']
-    ae = con["ae"]
-    ret_real = con['ret']  # 有效铣刀半径
+    #params['ret']=9
+    ae = con["ae"] # 12e-3 * params['ret'] / 7.5e-3
+    ret_real = con['ret']  # 有效铣刀半径,params['ret']
 
     ret_v = 26e-3     # 用于改变激光轨迹曲率的铣刀半径
     laser_r = con['laser_r']  # 激光束半径
     # fz = con["fz"]  # 每齿进给量
     tooth_number = con["tooth_number"]
-    fv = con["fv"]*1.185
+    fv = con["fv"]
 
     dt = con["dt"]  # 时间步长，即激光两点之间间隔时间
     base_factor = con["base_factor"]
@@ -259,7 +261,7 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
     # fz = con["fz"]  # 每齿进给量
     tooth_number = con["tooth_number"]
     # nr = con["nr"]
-    fv = con["fv"]  # 进给速率（mm/min)
+    fv = con["fv"]  # 进给速率（m/min)
     # dt = con["dt"]  # 时间步长，即激光两点之间间隔时间
     base_factor = con["base_factor"]
     sharpness_factor = con["sharpness_factor"]
@@ -310,7 +312,7 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
 
     step = (x_cycle.max() - x_cycle.min()) * 0.65
 
-    # ===================== 4. 分段生成轨迹（🔥 已修改：增加方向旋转） =====================
+    # ===================== 4. 分段生成轨迹（已修改：增加方向旋转） =====================
     laser_length = np.zeros(len(seg_lengths))
 
     # ===================== 3. 分段生成轨迹（每段内所有周期拼接为一个数组） =====================

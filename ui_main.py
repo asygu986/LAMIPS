@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'ui_mainfQLiQu.ui'
+## Form generated from reading UI file 'ui_maindPqLSz.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.15.2
 ##
@@ -209,7 +209,7 @@ class Ui_MainWindow(object):
         self.line_9.setFrameShadow(QFrame.Sunken)
         self.layoutWidget = QWidget(self.Input)
         self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(70, 800, 481, 41))
+        self.layoutWidget.setGeometry(QRect(10, 810, 611, 41))
         self.horizontalLayout = QHBoxLayout(self.layoutWidget)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
@@ -262,6 +262,18 @@ class Ui_MainWindow(object):
 "}")
 
         self.horizontalLayout.addWidget(self.btn_heat_even)
+
+        self.btn_run_abaqus = QPushButton(self.layoutWidget)
+        self.btn_run_abaqus.setObjectName(u"btn_run_abaqus")
+        self.btn_run_abaqus.setStyleSheet(u"QPushButton{\n"
+"	background-color:rgb(255, 97, 139);\n"
+"	height:22px;\n"
+"}\n"
+"QPushButton::hover{\n"
+"	background-color:rgb(65,184,131);\n"
+"}")
+
+        self.horizontalLayout.addWidget(self.btn_run_abaqus)
 
         self.line_10 = QFrame(self.Input)
         self.line_10.setObjectName(u"line_10")
@@ -549,6 +561,7 @@ class Ui_MainWindow(object):
         self.btn_laser.setText(QCoreApplication.translate("MainWindow", u"\u751f\u6210\u6fc0\u5149\u626b\u63cf\u8f68\u8ff9", None))
         self.btn_opt_laser.setText(QCoreApplication.translate("MainWindow", u"\u667a\u80fd\u4f18\u5316\u6fc0\u5149\u8f68\u8ff9", None))
         self.btn_heat_even.setText(QCoreApplication.translate("MainWindow", u"\u751f\u6210\u70ed\u573a\u56fe", None))
+        self.btn_run_abaqus.setText(QCoreApplication.translate("MainWindow", u"\u6267\u884cAbaqus\u4eff\u771f", None))
 #if QT_CONFIG(tooltip)
         self.btn_upload_gcode.setToolTip(QCoreApplication.translate("MainWindow", u"\u70b9\u51fb\u5f39\u51fa\u5750\u6807\u8f93\u5165\u8868\u683c", None))
 #endif // QT_CONFIG(tooltip)
