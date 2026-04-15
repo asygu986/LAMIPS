@@ -1,0 +1,69 @@
+      subroutine vdflux (
+C Read only (unmodifiable) variables -
+     1 nblock, ndim, kStep, kIncr, stepTime, totalTime, jUid,
+     2 amplitude, temp, curCoords, velocity, dirCos, jltyp, sname,
+C Write only (modifiable) variable -
+     1 value )
+C
+      include 'vaba_param.inc'
+C
+C     ===================== 【用户自定义参数 - 可直接修改】 =====================
+C     核心物理参数 (完全沿用你的数值)
+      REAL PI, RET, AE, LASER_R, RET_V, T1, R0, YITA, P, QM
+C     水平进给速度 FV (mm/s) → 这就是你要的【水平速度】，自行修改！
+      REAL FV
+C     刀具中心坐标
+      REAL X_CUTTER, Z_CUTTER
+C     ==========================================================================
+      INTEGER km
+      REAL Lw, gm, phi_b, x0, z0, x, z, rr
+      dimension curCoords(nblock,ndim), velocity(nblock,ndim),
+     1  jUid(nblock), dirCos(nblock,ndim,ndim), temp(nblock),
+     2  value(nblock)
+      character*80 sname
+C
+C     1. 常数定义
+      PI = 3.1415926
+
+C     2. 工艺参数 (严格使用你的参数)
+      RET     = 10.0          ! 实际铣刀半径 mm
+      AE      = 10.0 * RET / 7.5  ! 径向切深 mm
+      LASER_R = 2.5          ! 激光束半径 mm
+      RET_V   = 26.0         ! 激光轨迹曲率半径 mm
+      T1      = 0.01         ! 激光扫描周期 s
+      R0      = 2.0          ! 激光热源有效半径 mm
+      YITA    = 0.8          ! 吸收率
+      P       = 2500000.0    ! 激光功率 mW
+      FV      = 600         ! ✅ 水平进给速度 (mm/s) 
+C     峰值热通量
+      QM = YITA * P / (PI * R0**2)
+
+C     3. ✅ 刀具中心动态坐标 (带水平速度)
+      X_CUTTER = FV * stepTime  ! 沿X轴水平匀速运动 (核心水平速度)
+      Z_CUTTER = 0.0            ! Z向初始位置 (可根据需求修改)
+
+C     4. 激光轨迹核心计算 (100%还原你的Python公式)
+      Lw = AE + 2.0 * LASER_R
+      gm = 2.0 * ASIN( Lw / (2.0 * RET_V) )
+C     激光摆动角度公式
+      phi_b = -0.5 * gm * COS( 2.0 * PI * stepTime / T1 )
+
+C     5. 激光光斑中心坐标 (X-Z平面)
+      x0 = X_CUTTER + RET_V * COS(phi_b) - RET_V
+      z0 = Z_CUTTER + RET_V * SIN(phi_b)
+
+C     6. 高斯热源计算
+      do 100 km = 1, nblock
+C        当前积分点坐标 (X-Z平面)
+         x = curcoords(km, 1)
+         z = curcoords(km, 3)
+
+C        到激光中心的距离平方
+         rr = (x - x0)**2 + (z - z0)**2
+
+C        热通量赋值
+         value(km) = QM * EXP( -2.0 * rr / (R0**2) )
+ 100  continue
+
+      return
+      end
