@@ -23,7 +23,7 @@ def cutter_trajectory(con, coordinates):
     if len(coordinates) < 2:
         print("警告：坐标数量不足，需要至少两个点")
         # 使用默认起点 (0,0) 和 (0.01, 0) 作为终点
-        coordinates = [(0.0, 0.0), (0.01, 0.0)]
+        coordinates = [(0.0, 0.0), (10, 0.0)] # /mm
 
     # 获取进给速度
     X0Cutter = con['X0Cutter']  # 刀具初始X位置
@@ -32,7 +32,7 @@ def cutter_trajectory(con, coordinates):
     # fx = con['fx']  # X轴进给速度
     # fy = con['fy']  # 假设fy=0
     # fv = math.sqrt(fx ** 2) # 不考虑y轴进给速度
-    fv = con["fv"]/60  #  转化为 m/s
+    fv = con["fv"]/60  #  转化为 mm/s
 
 
     if fv == 0:
@@ -61,7 +61,7 @@ def cutter_trajectory(con, coordinates):
         sin_theta = dy / segment_length
 
         # 计算该段运动所需时间
-        segment_time = segment_length / fv  # 注意这里我们长度采用的都是m，所以不用再特地化为mm
+        segment_time = segment_length / fv  # 注意这里我们长度采用的都是mm
 
         segment_info = {
             'index': i,
@@ -149,11 +149,11 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
     ae = con["ae"] # 12e-3 * params['ret'] / 7.5e-3
     ret_real = con['ret']  # 有效铣刀半径,params['ret']
 
-    ret_v = 26e-3     # 用于改变激光轨迹曲率的铣刀半径
+    ret_v = 26     # 用于改变激光轨迹曲率的铣刀半径 /mm
     laser_r = con['laser_r']  # 激光束半径
     # fz = con["fz"]  # 每齿进给量
     tooth_number = con["tooth_number"]
-    fv = con["fv"]
+    fv = con["fv"]*1.15
 
     dt = con["dt"]  # 时间步长，即激光两点之间间隔时间
     base_factor = con["base_factor"]
@@ -174,7 +174,7 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
     gm = 2 * np.arcsin(Lw / 2 / ret_v)  # 激光扫描角度范围
     L1 = 2 * ret_v * gm
     # fr = fz * tooth_number  # 每转进给距离 (m/r)
-    fv = fv / 60   # 进给速率 (m/s)
+    fv = fv / 60   # 进给速率 (mm/s)
     vLaser1 = tooth_number * L1 * fv / laser_r / 2
     T1 = L1 / vLaser1  # 激光扫描过一个周期的时间
 
@@ -182,7 +182,7 @@ def sweeping_laser_trajectory_with_distance_preservation(con, traj_params, x_cut
     # print(point_of_one_pass)
 
     if total_length == 0:
-        total_length = 0.01
+        total_length = 10
 
     # ===================== 轨迹生成（100%还原你的原始逻辑+时间延迟防重叠） =====================
     laser_length = np.zeros(len(seg_lengths))
@@ -281,15 +281,15 @@ def sweeping_laser_trajectory_optimized(con, traj_params, x_cutter, y_cutter, cu
     gm = 2 * np.arcsin(Lw / 2 / ret)
     L1 = 2 * ret * gm
     # fr = fz * tooth_number
-    fv = fv / 60
+    fv = fv / 60 # /mm/s
     vLaser1 = tooth_number * L1 * fv / laser_r / 2
     # T1 = L1 / vLaser1  # 激光单周期时间
 
     # ===================== 3. 加载【.mat优化轨迹】（核心功能保留） =====================
     x_mat = sio.loadmat("opt_path\\x_traj.mat")
     y_mat = sio.loadmat("opt_path\\y_traj.mat")
-    x_cycle = np.asarray(x_mat['vector1']).flatten().astype(float)
-    y_cycle = np.asarray(y_mat['vector2']).flatten().astype(float)
+    x_cycle = np.asarray(x_mat['vector1']).flatten().astype(float)*1000  # /转化为mm
+    y_cycle = np.asarray(y_mat['vector2']).flatten().astype(float)*1000  # /转化为mm
 
     # ===================== 新增核心：缩放 + 平移（精准满足要求） =====================
     y_min = np.min(y_cycle)

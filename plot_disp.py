@@ -135,8 +135,8 @@ def cutter_matplotlib_plot(x, y, ret, x_scope, y_scope):
     )
 
     # 步骤6：设置图形样式和标签
-    ax.set_xlabel('X/m',fontsize=10)  # X轴标签
-    ax.set_ylabel('Y/m',fontsize=10)  # Y轴标签
+    ax.set_xlabel('X/mm',fontsize=10)  # X轴标签
+    ax.set_ylabel('Y/mm',fontsize=10)  # Y轴标签
     ax.set_title(f'铣刀轨迹',fontsize=10, fontweight='bold')  # 图形标题
     ax.set_aspect('equal')  # 等比例坐标轴（保证圆形显示为正圆）
     ax.grid(True)  # 显示网格线
@@ -270,8 +270,8 @@ def laser_matplotlib_plot(x_cutter, y_cutter, Ret, rb0, x_laser=None, y_laser=No
     ax.set_xlim(x_scope[0], x_scope[1])
     ax.set_ylim(y_scope[0], y_scope[1])
 
-    ax.set_xlabel('X/m', fontsize=10)
-    ax.set_ylabel('Y/m', fontsize=10)
+    ax.set_xlabel('X/mm', fontsize=10)
+    ax.set_ylabel('Y/mm', fontsize=10)
     ax.set_aspect('auto')  # 或直接删除该行
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.ticklabel_format(style='sci', axis='both', scilimits=(0, 0))
@@ -361,9 +361,9 @@ class HeatAnimationController(QObject):
         x_min, x_max = x.min(), x.max()
         y_min, y_max = y.min(), y.max()
         if x_min == x_max:
-            x_min, x_max = x_min - 0.1, x_max + 0.1
+            x_min, x_max = x_min - 10, x_max + 10 # 转化为mm
         if y_min == y_max:
-            y_min, y_max = y_min - 0.1, y_max + 0.1
+            y_min, y_max = y_min - 10, y_max + 10
         self.extent = [x_min, x_max, y_min, y_max]
 
         # 第一帧
@@ -374,8 +374,8 @@ class HeatAnimationController(QObject):
                                  cmap='hot', vmin=self.vmin, vmax=self.vmax,
                                  aspect='auto', interpolation='bilinear')
         self.fig.colorbar(self.im, ax=self.ax, label='温度 (K)')
-        self.ax.set_xlabel('X/m',fontsize=10)
-        self.ax.set_ylabel('Y/m',fontsize=10)
+        self.ax.set_xlabel('X/mm',fontsize=10)
+        self.ax.set_ylabel('Y/mm',fontsize=10)
         self.ax.set_title(f'温度场分布 (时间: {times[0]:.4f} s)',fontsize=10, fontweight='bold')
 
         self.canvas.draw()
@@ -430,8 +430,8 @@ class HeatAnimationController(QObject):
             im = ax.imshow(self.frames[0].T, extent=self.extent, origin='lower',
                            cmap='hot', vmin=self.vmin, vmax=self.vmax, aspect='auto')
             fig.colorbar(im, label='温度 (K)')
-            ax.set_xlabel('X/m',fontsize=10)
-            ax.set_ylabel('Y/m',fontsize=10)
+            ax.set_xlabel('X/mm',fontsize=10)
+            ax.set_ylabel('Y/mm',fontsize=10)
 
             def update(i):
                 im.set_data(self.frames[i].T)

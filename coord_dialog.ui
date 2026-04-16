@@ -78,7 +78,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>请输入坐标点 (单位：m)</string>
+    <string>请输入坐标点 (单位：mm)</string>
    </property>
   </widget>
   <widget class="QWidget" name="layoutWidget">
